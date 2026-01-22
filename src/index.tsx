@@ -5,15 +5,20 @@ import styled from 'styled-components';
 const Container = styled.div`
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 	background: #f5f5f5;
-	min-height: 100vh;
+	width: 100%;
+	height: 100%;
 	padding: 20px;
+	overflow: hidden;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
 `;
 
 const MainLayout = styled.div`
 	display: flex;
 	gap: 20px;
-	max-width: 1600px;
-	margin: 0 auto;
+	height: 100%;
+	overflow: hidden;
 `;
 
 const LeftSection = styled.div`
@@ -21,7 +26,8 @@ const LeftSection = styled.div`
 	display: flex;
 	flex-direction: column;
 	gap: 20px;
-	min-height: calc(100vh - 40px);
+	height: 100%;
+	overflow: hidden;
 `;
 
 const TopPanel = styled.div`
@@ -132,6 +138,7 @@ const VisualizationArea = styled.div`
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
+	overflow: hidden;
 `;
 
 const Header = styled.div`
@@ -179,6 +186,7 @@ const SvgChart = styled.svg`
 	width: 100%;
 	height: 100%;
 	flex: 1;
+	overflow: hidden;
 `;
 
 const ControlPanel = styled.div`
