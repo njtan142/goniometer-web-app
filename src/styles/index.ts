@@ -359,3 +359,84 @@ export const RecentDataButton = styled.button`
 		border-color: #2196f3;
 	}
 `;
+
+export const AnimateButtonContainer = styled.div`
+	display: flex;
+	justify-content: center;
+	margin-top: 16px;
+	padding: 0 20px;
+`;
+
+export const ModalOverlay = styled.div`
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+`;
+
+export const ModalContent = styled.div`
+	background: white;
+	border-radius: 8px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+	min-width: 400px;
+	max-width: 90%;
+	max-height: 90vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+`;
+
+export const ModalHeader = styled.div`
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 16px 20px;
+	border-bottom: 1px solid #f0f0f0;
+`;
+
+export const ModalTitle = styled.h2`
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+	color: #333;
+`;
+
+export const CloseButton = styled.button`
+	background: none;
+	border: none;
+	font-size: 24px;
+	color: #999;
+	cursor: pointer;
+	padding: 0;
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: color 0.2s;
+
+	&:hover {
+		color: #333;
+	}
+`;
+
+export const ModalBody = styled.div`
+	padding: 20px;
+	overflow-y: auto;
+	flex: 1;
+`;
+
+export const ModalFooter = styled.div`
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+	padding: 16px 20px;
+	border-top: 1px solid #f0f0f0;
+	background: #fafafa;
+`;
