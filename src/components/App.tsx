@@ -41,6 +41,7 @@ export function App() {
 				<AnimateModal
 					isOpen={showAnimateModal}
 					onClose={() => setShowAnimateModal(false)}
+                    targetJoint='leftWrist'
 				/>
 
 				<StatusSidebar activeJoints={activeJoints} />
