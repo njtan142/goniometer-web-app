@@ -4,6 +4,10 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
+		"build:esp32": "vite build && npm run compress:esp32",
+		"build:esp32:uncompressed": "vite build && npm run copy:esp32-uncompressed",
+		"compress:esp32": "node scripts/esp32-build.js",
+		"copy:esp32-uncompressed": "node scripts/esp32-copy-uncompressed.js",
 		"preview": "vite preview"
 	},
 	"dependencies": {
@@ -18,6 +22,7 @@
 		"@preact/preset-vite": "^2.10.2",
 		"eslint": "^9.39.2",
 		"eslint-config-preact": "^2.0.0",
+		"terser": "^5.46.0",
 		"typescript": "^5.9.3",
 		"vite": "^7.0.4"
 	},

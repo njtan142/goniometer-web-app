@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-esp32
+dist-esp32-uncompressed
 *.local
 
 # Editor directories and files

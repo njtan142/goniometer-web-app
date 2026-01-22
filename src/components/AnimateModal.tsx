@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'preact/hooks';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import sceneUrl from '../assets/character/scene.gltf?url';
+// Force Vite to include the binary file in the build
+// @ts-ignore
+import '../assets/character/scene.bin?url';
 import * as S from '../styles';
 
 export type JointType = 'hip' | 'knee' | 'ankle' | 'shoulder' | 'elbow' | 'wrist';
@@ -84,7 +88,10 @@ export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow' }: An
 
 		// Load character model
 		const loader = new GLTFLoader();
-		loader.load('/src/assets/character/scene.gltf', (gltf) => {
+		// Set the resource path so the loader can find scene.bin relative to scene.gltf
+		const basePath = sceneUrl.substring(0, sceneUrl.lastIndexOf('/') + 1);
+		loader.setResourcePath(basePath);
+		loader.load(sceneUrl, (gltf) => {
 			const model = gltf.scene;
 			scene.add(model);
 
