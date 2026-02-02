@@ -153,7 +153,7 @@ export const Header = styled.div`
 
 	.subtitle {
 		color: #999;
-		font-size: 12px;
+		font-size: 14px;
 		font-weight: normal;
 	}
 `;
@@ -169,12 +169,12 @@ export const LegendItem = styled.div`
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 12px;
+	font-size: 14px;
 	color: #666;
 
 	.dot {
-		width: 10px;
-		height: 10px;
+		width: 12px;
+		height: 12px;
 		border-radius: 2px;
 		background: ${props => props.color};
 	}

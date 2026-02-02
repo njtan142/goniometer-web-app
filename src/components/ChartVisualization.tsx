@@ -58,7 +58,7 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 					<h1>Goniometer</h1>
 					<div className="subtitle">Motion Capture System</div>
 				</div>
-				<div style={{ textAlign: 'right', fontSize: '12px', color: '#999' }}>
+				<div style={{ textAlign: 'right', fontSize: '14px', color: '#999' }}>
 					Rate: <span style={{ color: '#2196f3' }}>50Hz</span>
 				</div>
 			</S.Header>
@@ -148,9 +148,9 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 						<text 
 							key={`range-label-${type}`}
 							x="740" 
-							y={yBottom - 10 - (i * 12)} 
+							y={yBottom - 14 - (i * 18)} 
 							textAnchor="end" 
-							fontSize="10" 
+							fontSize="14" 
 							fill="white"
 							style={{ 
 								fontWeight: 600, 
@@ -167,7 +167,7 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 
 				{/* Y-axis labels */}
 				{[0, 45, 90, 135, 180].map((val, i) => (
-					<text key={`y-${i}`} x="30" y={250 - (i * 50)} fontSize="12" textAnchor="end" fill="#999">
+					<text key={`y-${i}`} x="30" y={250 - (i * 50)} fontSize="14" textAnchor="end" fill="#999">
 						{val}
 					</text>
 				))}
@@ -243,7 +243,7 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 
 				{/* X-axis labels */}
 				{Array.from({ length: 29 }).map((_, i) => (
-					<text key={`x-${i}`} x={50 + i * 25} y="270" fontSize="11" textAnchor="middle" fill="#999">
+					<text key={`x-${i}`} x={50 + i * 25} y="270" fontSize="14" textAnchor="middle" fill="#999">
 						{i}
 					</text>
 				))}
