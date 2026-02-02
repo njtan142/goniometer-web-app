@@ -49,7 +49,7 @@ export function StatusSidebar({ activeJoints }: StatusSidebarProps) {
 						return (
 							<S.DataCell key={jointId}>
 								<div className="label" style={{ fontSize: '9px' }}>
-									{joint?.label.split(' ')[0]}
+									{joint?.label}
 								</div>
 								<div className="value" style={{ fontSize: '13px' }}>
 									40.0°
@@ -69,7 +69,7 @@ export function StatusSidebar({ activeJoints }: StatusSidebarProps) {
 						return (
 							<div key={jointId} style={{ minWidth: '60px' }}>
 								<div style={{ fontSize: '9px', color: '#999', marginBottom: '4px' }}>
-									{joint?.label.split(' ')[0]}
+									{joint?.label}
 								</div>
 								<div style={{ fontSize: '10px', color: '#666', marginBottom: '2px' }}>Min: 27.2°</div>
 								<div style={{ fontSize: '10px', color: '#666', marginBottom: '2px' }}>Max: 68.8°</div>
