@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'preact/hooks';
 import * as S from '../styles';
-import { JOINTS, JOINT_COLORS, JOINT_DATA } from '../constants/joints';
+import { JOINTS, JOINT_COLORS, JOINT_DATA, NORMATIVE_RANGES } from '../constants/joints';
 
 interface ChartVisualizationProps {
 	activeJoints: string[];
@@ -7,6 +8,27 @@ interface ChartVisualizationProps {
 }
 
 export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisualizationProps) {
+	const [visibleJoints, setVisibleJoints] = useState<string[]>(activeJoints);
+
+	useEffect(() => {
+		setVisibleJoints(activeJoints);
+	}, [activeJoints]);
+
+	const toggleJoint = (jointId: string) => {
+		setVisibleJoints(prev => 
+			prev.includes(jointId)
+				? prev.filter(id => id !== jointId)
+				: [...prev, jointId]
+		);
+	};
+
+	const getY = (deg: number) => 250 - (deg * (200 / 180));
+	const getDeg = (y: number) => (250 - y) * (180 / 200);
+
+	const activeTypes = Array.from(new Set(
+		visibleJoints.map(id => JOINTS.find(j => j.value === id)?.type).filter(Boolean)
+	)) as string[];
+
 	return (
 		<S.VisualizationArea>
 			<S.Header>
@@ -22,9 +44,20 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 			<S.ChartLegend>
 				{activeJoints.map(jointId => {
 					const joint = JOINTS.find(j => j.value === jointId);
+					const isVisible = visibleJoints.includes(jointId);
 					return (
-						<S.LegendItem key={jointId}>
-							<div className="dot" style={{ background: JOINT_COLORS[jointId] }} />
+						<S.LegendItem 
+							key={jointId} 
+							style={{ cursor: 'pointer', opacity: isVisible ? 1 : 0.5 }}
+							onClick={() => toggleJoint(jointId)}
+						>
+							<input 
+								type="checkbox" 
+								checked={isVisible} 
+								readOnly 
+								style={{ cursor: 'pointer', marginRight: '4px' }}
+							/>
+							<div className="dot" style={{ background: JOINT_COLORS[jointId as keyof typeof JOINT_COLORS] }} />
 							<span>{joint?.label}</span>
 						</S.LegendItem>
 					);
@@ -32,6 +65,36 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 			</S.ChartLegend>
 
 			<S.SvgChart viewBox="0 0 800 300">
+				{activeTypes.map(type => {
+					const range = NORMATIVE_RANGES[type as keyof typeof NORMATIVE_RANGES];
+					if (!range) return null;
+					
+					const yTop = getY(range.max);
+					const yBottom = getY(range.min);
+					const height = yBottom - yTop;
+
+					return (
+						<g key={`range-${type}`}>
+							<rect 
+								x="50" 
+								y={yTop} 
+								width="700" 
+								height={height} 
+								fill={range.color} 
+							/>
+							<text 
+								x="740" 
+								y={yBottom - 10} 
+								textAnchor="end" 
+								fontSize="10" 
+								fill="#666"
+							>
+								{range.label} ✓
+							</text>
+						</g>
+					);
+				})}
+
 				<line x1="50" y1="250" x2="750" y2="250" stroke="#ddd" />
 				<line x1="50" y1="50" x2="50" y2="250" stroke="#ddd" />
 
@@ -48,16 +111,68 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 				))}
 
 				{/* Sample data lines for active joints */}
-				{activeJoints.map((jointId, idx) => (
-					<polyline
-						key={`line-${jointId}`}
-						points={JOINT_DATA[jointId]}
-						fill="none"
-						stroke={JOINT_COLORS[jointId]}
-						strokeWidth="2"
-						opacity={1 - idx * 0.15}
-					/>
-				))}
+				{visibleJoints.map((jointId, idx) => {
+					const pointsStr = JOINT_DATA[jointId as keyof typeof JOINT_DATA];
+					const points = pointsStr.split(' ').map(p => {
+						const [x, y] = p.split(',').map(Number);
+						return { x, y };
+					});
+					
+					const joint = JOINTS.find(j => j.value === jointId);
+					const range = joint ? NORMATIVE_RANGES[joint.type as keyof typeof NORMATIVE_RANGES] : null;
+
+					return (
+						<g key={`group-${jointId}`}>
+							<polyline
+								points={pointsStr}
+								fill="none"
+								stroke={JOINT_COLORS[jointId as keyof typeof JOINT_COLORS]}
+								strokeWidth="2"
+								opacity={1 - idx * 0.15}
+							/>
+							{range && points.map((p, i) => {
+								const deg = getDeg(p.y);
+								const isNormative = deg >= range.min && deg <= range.max;
+								
+								if (!isNormative) {
+									return (
+										<g key={`point-warning-${jointId}-${i}`}>
+											<text
+												x={p.x}
+												y={p.y + 4}
+												textAnchor="middle"
+												fontSize="14"
+												fill="#f44336"
+												style={{ filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.1))' }}
+											>
+												⚠
+											</text>
+										</g>
+									);
+								}
+
+								return (
+									<g key={`point-${jointId}-${i}`}>
+										<circle 
+											cx={p.x} 
+											cy={p.y} 
+											r="4" 
+											fill="#fff"
+											stroke={JOINT_COLORS[jointId as keyof typeof JOINT_COLORS]}
+											strokeWidth="1"
+										/>
+										<circle 
+											cx={p.x} 
+											cy={p.y} 
+											r="2.5" 
+											fill={JOINT_COLORS[jointId as keyof typeof JOINT_COLORS]}
+										/>
+									</g>
+								);
+							})}
+						</g>
+					);
+				})}
 
 				{/* X-axis labels */}
 				{Array.from({ length: 29 }).map((_, i) => (
