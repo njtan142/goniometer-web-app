@@ -14,12 +14,12 @@ export const JOINTS = [
 ];
 
 export const NORMATIVE_RANGES = {
-	elbow: { min: 30, max: 150, color: 'rgba(33, 150, 243, 0.2)', label: 'Normative Range (Elbows)' },
-	knee: { min: 0, max: 135, color: 'rgba(76, 175, 80, 0.2)', label: 'Normative Range (Knees)' },
-	shoulder: { min: 0, max: 180, color: 'rgba(156, 39, 176, 0.2)', label: 'Normative Range (Shoulders)' },
-	hip: { min: 0, max: 120, color: 'rgba(255, 152, 0, 0.2)', label: 'Normative Range (Hips)' },
-	wrist: { min: 0, max: 80, color: 'rgba(0, 188, 212, 0.2)', label: 'Normative Range (Wrists)' },
-	ankle: { min: 0, max: 50, color: 'rgba(233, 30, 99, 0.2)', label: 'Normative Range (Ankles)' },
+	elbow: { min: 0, max: 140, color: 'rgba(68, 138, 255, 0.2)', label: 'Normative Range (Elbows)' }, // Blue
+	knee: { min: 0, max: 150, color: 'rgba(105, 240, 174, 0.2)', label: 'Normative Range (Knees)' }, // Green
+	shoulder: { min: 0, max: 180, color: 'rgba(224, 64, 251, 0.2)', label: 'Normative Range (Shoulders)' }, // Magenta/Purple
+	hip: { min: 0, max: 135, color: 'rgba(255, 215, 0, 0.25)', label: 'Normative Range (Hips)' }, // Yellow/Gold
+	wrist: { min: 0, max: 90, color: 'rgba(24, 255, 255, 0.2)', label: 'Normative Range (Wrists)' }, // Cyan
+	ankle: { min: 0, max: 50, color: 'rgba(255, 82, 82, 0.2)', label: 'Normative Range (Ankles)' }, // Red
 };
 
 export const JOINT_COLORS = {

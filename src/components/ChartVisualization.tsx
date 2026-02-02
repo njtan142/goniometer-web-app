@@ -29,6 +29,28 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 		visibleJoints.map(id => JOINTS.find(j => j.value === id)?.type).filter(Boolean)
 	)) as string[];
 
+	// Sort types by range size (max - min) so larger ranges are rendered first (at the back)
+	activeTypes.sort((a, b) => {
+		const rangeA = NORMATIVE_RANGES[a as keyof typeof NORMATIVE_RANGES];
+		const rangeB = NORMATIVE_RANGES[b as keyof typeof NORMATIVE_RANGES];
+		const heightA = (rangeA?.max || 0) - (rangeA?.min || 0);
+		const heightB = (rangeB?.max || 0) - (rangeB?.min || 0);
+		return heightB - heightA;
+	});
+
+	const patternLineThickness = 0.75; // Thinner lines for the grid
+
+	const getDynamicColor = (index: number, total: number) => {
+		const baseHue = 197; // Sky blue
+		const step = 360 / total;
+		const hue = (baseHue + (index * step)) % 360;
+		return {
+			bg: `hsla(${hue}, 50%, 75%, 1)`, // Lower saturation (pastel), opaque
+			line: `hsla(${hue}, 40%, 60%, 1)`,
+			glow: `hsla(${hue}, 100%, 60%, 1)`
+		};
+	};
+
 	return (
 		<S.VisualizationArea>
 			<S.Header>
@@ -65,7 +87,34 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 			</S.ChartLegend>
 
 			<S.SvgChart viewBox="0 0 800 300">
-				{activeTypes.map(type => {
+				<defs>
+					{activeTypes.map((type, i) => {
+						const colors = getDynamicColor(i, activeTypes.length);
+						// Fixed angle (cross pattern), just offset the starting position
+						const patternSize = 8;
+						const offset = i * 3; 
+						
+						return (
+							<pattern 
+								key={`pattern-def-${type}`} 
+								id={`pattern-${type}`} 
+								patternUnits="userSpaceOnUse" 
+								width={patternSize} 
+								height={patternSize} 
+								patternTransform={`rotate(45) translate(${offset}, 0)`}
+							>
+								<rect width={patternSize} height={patternSize} fill="white" fillOpacity="0.3" />
+								{/* Vertical line */}
+								<rect x={(patternSize - patternLineThickness) / 2} y="0" width={patternLineThickness} height={patternSize} fill={colors.bg} />
+								{/* Horizontal line */}
+								<rect x="0" y={(patternSize - patternLineThickness) / 2} width={patternSize} height={patternLineThickness} fill={colors.bg} />
+							</pattern>
+						);
+					})}
+				</defs>
+
+				{/* Background Ranges - Rendered first */}
+				{activeTypes.map((type, i) => {
 					const range = NORMATIVE_RANGES[type as keyof typeof NORMATIVE_RANGES];
 					if (!range) return null;
 					
@@ -74,24 +123,42 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 					const height = yBottom - yTop;
 
 					return (
-						<g key={`range-${type}`}>
-							<rect 
-								x="50" 
-								y={yTop} 
-								width="700" 
-								height={height} 
-								fill={range.color} 
-							/>
-							<text 
-								x="740" 
-								y={yBottom - 10} 
-								textAnchor="end" 
-								fontSize="10" 
-								fill="#666"
-							>
-								{range.label} ✓
-							</text>
-						</g>
+						<rect 
+							key={`range-rect-${type}`}
+							x="50" 
+							y={yTop} 
+							width="700" 
+							height={height} 
+							fill={`url(#pattern-${type})`}
+							stroke="#eee"
+							strokeWidth="1"
+						/>
+					);
+				})}
+
+				{/* Range Labels - Rendered on top of all ranges */}
+				{activeTypes.map((type, i) => {
+					const range = NORMATIVE_RANGES[type as keyof typeof NORMATIVE_RANGES];
+					if (!range) return null;
+					
+					const yBottom = getY(range.min);
+					const colors = getDynamicColor(i, activeTypes.length);
+
+					return (
+						<text 
+							key={`range-label-${type}`}
+							x="740" 
+							y={yBottom - 10 - (i * 12)} 
+							textAnchor="end" 
+							fontSize="10" 
+							fill="white"
+							style={{ 
+								fontWeight: 600, 
+								textShadow: `0 0 4px ${colors.glow}, 0 0 2px ${colors.glow}`
+							}}
+						>
+							{range.label} ✓
+						</text>
 					);
 				})}
 
