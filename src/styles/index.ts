@@ -36,7 +36,7 @@ export const TopPanel = styled.div`
 	border-radius: 8px;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 	align-items: center;
-	height: 120px;
+	height: 150px;
 `;
 
 export const GaugeSection = styled.div`
@@ -91,27 +91,15 @@ export const JointSelector = styled.select`
 `;
 
 export const GaugeContainer = styled.div`
-	width: 100px;
-	height: 100px;
-	border: 3px solid #ddd;
-	border-radius: 50%;
+	width: 120px;
+	height: 120px;
+	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	font-size: 24px;
 	font-weight: bold;
 	color: #333;
-	position: relative;
-	overflow: hidden;
-`;
-
-export const GaugeFill = styled.div`
-	position: absolute;
-	bottom: 0;
-	width: 100%;
-	height: ${props => props.fill}%;
-	background: linear-gradient(to top, #2196f3, #64b5f6);
-	transition: height 0.3s ease;
 `;
 
 export const GaugeLabel = styled.div`
