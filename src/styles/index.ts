@@ -165,18 +165,47 @@ export const ChartLegend = styled.div`
 	flex-wrap: wrap;
 `;
 
-export const LegendItem = styled.div`
+export const LegendItem = styled.button<{ $isActive?: boolean }>`
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	font-size: 14px;
-	color: #666;
+	font-family: inherit;
+	color: ${props => props.$isActive ? '#333' : '#777'};
+	
+	background: ${props => props.$isActive ? '#ffffff' : '#f5f5f5'};
+	border: 1px solid ${props => props.$isActive ? '#e0e0e0' : 'transparent'};
+	padding: 6px 12px;
+	border-radius: 20px;
+	cursor: pointer;
+	box-shadow: ${props => props.$isActive 
+		? '0 2px 4px rgba(0,0,0,0.08)' 
+		: 'inset 0 1px 2px rgba(0,0,0,0.05)'};
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	
+	/* Prevent text selection */
+	user-select: none;
+	-webkit-user-select: none;
+
+	&:hover {
+		background: #ffffff;
+		box-shadow: 0 3px 6px rgba(0,0,0,0.12);
+		transform: translateY(-1px);
+		color: #333;
+	}
+	
+	&:active {
+		transform: translateY(0);
+		box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+	}
 
 	.dot {
-		width: 12px;
-		height: 12px;
-		border-radius: 2px;
-		background: ${props => props.color};
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		/* background is set inline */
+		box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+		opacity: ${props => props.$isActive ? 1 : 0.6};
 	}
 `;
 

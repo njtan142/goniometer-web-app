@@ -70,15 +70,9 @@ export function ChartVisualization({ activeJoints, onAnimateClick }: ChartVisual
 					return (
 						<S.LegendItem 
 							key={jointId} 
-							style={{ cursor: 'pointer', opacity: isVisible ? 1 : 0.5 }}
+							$isActive={isVisible}
 							onClick={() => toggleJoint(jointId)}
 						>
-							<input 
-								type="checkbox" 
-								checked={isVisible} 
-								readOnly 
-								style={{ cursor: 'pointer', marginRight: '4px' }}
-							/>
 							<div className="dot" style={{ background: JOINT_COLORS[jointId as keyof typeof JOINT_COLORS] }} />
 							<span>{joint?.label}</span>
 						</S.LegendItem>
