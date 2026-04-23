@@ -7,13 +7,35 @@ html {
 	overflow: hidden;
 }
 
+body{
+	margin: 0;
+}
+
 :root {
 	font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
 	line-height: 1.5;
 	font-weight: 400;
 
-	color: #222;
-	background-color: #ffffff;
+	/* Neutral Neumorphism Palette */
+	--bg-color: #efefef;
+	--text-main: #555555;
+	--text-secondary: #888888;
+	--text-highlight: #2196f3;
+	
+	/* Shadows for #efefef */
+	--shadow-light: #ffffff;
+	--shadow-dark: #d1d1d1;
+	
+	/* Inset shadows */
+	--shadow-inset-light: inset -2px -2px 5px var(--shadow-light);
+	--shadow-inset-dark: inset 2px 2px 5px var(--shadow-dark);
+	
+	/* Raised shadows */
+	--shadow-raised: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+	--shadow-raised-hover: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+
+	color: var(--text-main);
+	background-color: var(--bg-color);
 
 	font-synthesis: none;
 	text-rendering: optimizeLegibility;
@@ -29,6 +51,7 @@ body {
 	height: 100vh;
 	overflow: hidden;
 	display: flex;
+	background-color: var(--bg-color);
 }
 
 #app {

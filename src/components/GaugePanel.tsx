@@ -9,9 +9,9 @@ interface GaugePanelProps {
 }
 
 export function GaugePanel({ angle, selectedJoint, onJointChange }: GaugePanelProps) {
-	const size = 120;
+	const size = 130;
 	const center = size / 2;
-	const radius = size / 2 - 2;
+	const radius = size / 2 - 5; // Reduced radius slightly to account for stroke/padding
 
 	const ticks = useMemo(() => {
 		const result = [];
@@ -43,7 +43,7 @@ export function GaugePanel({ angle, selectedJoint, onJointChange }: GaugePanelPr
 					y1={y1}
 					x2={x2}
 					y2={y2}
-					stroke="#555"
+					stroke="var(--text-secondary)"
 					strokeWidth={isMajor ? 1.5 : 1}
 				/>
 			);
@@ -60,7 +60,7 @@ export function GaugePanel({ angle, selectedJoint, onJointChange }: GaugePanelPr
 						textAnchor="middle"
 						dominantBaseline="middle" // This might be dominant-baseline in SVG
 						fontSize="8"
-						fill="#333"
+						fill="var(--text-main)"
 						style={{ userSelect: 'none', pointerEvents: 'none' }}
 					>
 						{i}
@@ -83,7 +83,8 @@ export function GaugePanel({ angle, selectedJoint, onJointChange }: GaugePanelPr
 				</S.JointSelector>
 				<S.GaugeContainer>
 					<svg width={size} height={size} style={{ overflow: 'visible' }}>
-						<circle cx={center} cy={center} r={radius} fill="white" stroke="#ccc" strokeWidth="1" />
+						{/* Background circle removed/transparent to let container gradient show */}
+						<circle cx={center} cy={center} r={radius} fill="none" stroke="var(--shadow-dark)" strokeWidth="0.5" opacity="0.5" />
 						{ticks}
 
 						{/* Needle - Rotate by -angle to match the CCW scale */}
@@ -113,13 +114,13 @@ export function GaugePanel({ angle, selectedJoint, onJointChange }: GaugePanelPr
 							fontSize: '16px',
 							fontWeight: 'bold',
 							pointerEvents: 'none',
-                            color: '#333'
+                            color: 'var(--text-main)'
 						}}
 					>
 						{angle.toFixed(1)}°
 					</div>
 				</S.GaugeContainer>
-				<div style={{ fontSize: '11px', color: '#999' }}>Zero</div>
+				<div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Zero</div>
 			</div>
 		</S.GaugeSection>
 	);
