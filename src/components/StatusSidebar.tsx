@@ -7,20 +7,22 @@ interface StatusSidebarProps {
 	jointAngles: Record<string, number>;
 	chartData: Record<string, number[]>;
 	history: HistorySession[];
+	batteryPct?: number;
+	isConnected?: boolean;
 }
 
-export function StatusSidebar({ activeJoints, jointAngles, chartData, history }: StatusSidebarProps) {
+export function StatusSidebar({ activeJoints, jointAngles, chartData, history, batteryPct = 92, isConnected = false }: StatusSidebarProps) {
 	return (
 		<S.RightSidebar>
 			<S.StatusSection>
 				<S.StatusTitle>Status</S.StatusTitle>
 				<S.StatusItem>
 					<span className="label">Battery</span>
-					<span className="value">92%</span>
+					<span className="value">{batteryPct}%</span>
 				</S.StatusItem>
 				<S.StatusItem style={{ borderBottom: 'none' }}>
 					<span className="label">Live</span>
-					<span className="value" style={{ color: '#4caf50' }}>◆</span>
+					<span className="value" style={{ color: isConnected ? '#4caf50' : '#888' }}>◆</span>
 				</S.StatusItem>
 			</S.StatusSection>
 

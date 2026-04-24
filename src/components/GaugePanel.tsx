@@ -73,14 +73,14 @@ export function GaugePanel({ angle, selectedJoint, onJointChange }: GaugePanelPr
 
 	return (
 		<S.GaugeSection>
-			<div>
-				<S.JointSelector value={selectedJoint} onChange={e => onJointChange(e.target.value)}>
-					{JOINTS.map(joint => (
-						<option key={joint.value} value={joint.value}>
-							{joint.label}
-						</option>
-					))}
-				</S.JointSelector>
+			<S.JointSelector value={selectedJoint} onChange={e => onJointChange(e.target.value)}>
+				{JOINTS.map(joint => (
+					<option key={joint.value} value={joint.value}>
+						{joint.label}
+					</option>
+				))}
+			</S.JointSelector>
+			<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
 				<S.GaugeContainer>
 					<svg width={size} height={size} style={{ overflow: 'visible' }}>
 						{/* Background circle removed/transparent to let container gradient show */}
@@ -114,7 +114,7 @@ export function GaugePanel({ angle, selectedJoint, onJointChange }: GaugePanelPr
 							fontSize: '16px',
 							fontWeight: 'bold',
 							pointerEvents: 'none',
-                            color: 'var(--text-main)'
+							color: 'var(--text-main)'
 						}}
 					>
 						{angle.toFixed(1)}°

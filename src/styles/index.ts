@@ -31,7 +31,7 @@ export const LeftSection = styled.div`
 
 export const TopPanel = styled.div`
 	display: flex;
-	gap: 30px;
+	justify-content: space-evenly;
 	background: var(--bg-color);
 	padding: 15px 20px;
 	border-radius: 20px;
@@ -41,24 +41,11 @@ export const TopPanel = styled.div`
 `;
 
 export const GaugeSection = styled.div`
-	flex: 0 0 auto;
-	display: flex;
-	align-items: center;
-	gap: 12px;
-
-	> div {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
+	display: contents;
 `;
 
 export const ControlPanelTop = styled.div`
-	flex: 1;
-	display: flex;
-	gap: 20px;
-	align-items: center;
-	justify-content: flex-start;
+	display: contents;
 `;
 
 export const LeftSidebar = styled.div`

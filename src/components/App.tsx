@@ -6,29 +6,11 @@ import { ChartVisualization } from './ChartVisualization';
 import { AnimateModal } from './AnimateModal';
 import { StatusSidebar } from './StatusSidebar';
 import { JOINTS } from '../constants/joints';
+import { WebRTCClient, SensorReading } from '../lib/webrtc';
 
 export const CHART_POINTS = 29;
 export const ACTIVE_JOINTS = ['left-elbow', 'right-elbow', 'left-knee', 'right-knee'];
 
-const MOCK_PARAMS: Record<string, { center: number; amplitude: number; period: number; phase: number }> = {
-	'left-elbow':     { center: 80,  amplitude: 40, period: 8000,  phase: 0 },
-	'right-elbow':    { center: 75,  amplitude: 38, period: 7500,  phase: 1.2 },
-	'left-knee':      { center: 90,  amplitude: 45, period: 10000, phase: 0.5 },
-	'right-knee':     { center: 85,  amplitude: 42, period: 9500,  phase: 1.8 },
-	'left-shoulder':  { center: 90,  amplitude: 55, period: 12000, phase: 0.3 },
-	'right-shoulder': { center: 88,  amplitude: 52, period: 11500, phase: 2.1 },
-	'left-hip':       { center: 70,  amplitude: 30, period: 9000,  phase: 0.8 },
-	'right-hip':      { center: 68,  amplitude: 28, period: 8500,  phase: 2.5 },
-	'left-wrist':     { center: 45,  amplitude: 20, period: 6000,  phase: 1.0 },
-	'right-wrist':    { center: 43,  amplitude: 18, period: 5500,  phase: 0.4 },
-	'left-ankle':     { center: 25,  amplitude: 12, period: 7000,  phase: 1.5 },
-	'right-ankle':    { center: 23,  amplitude: 10, period: 6500,  phase: 2.8 },
-};
-
-function mockAngle(jointId: string, t: number): number {
-	const p = MOCK_PARAMS[jointId] ?? { center: 60, amplitude: 30, period: 8000, phase: 0 };
-	return p.center + p.amplitude * Math.sin((2 * Math.PI * t) / p.period + p.phase);
-}
 
 export interface HistorySession {
 	timestamp: string;
@@ -43,56 +25,80 @@ export function App() {
 	const [isHeld, setIsHeld] = useState(false);
 	const [selectedJoint, setSelectedJoint] = useState('left-elbow');
 	const [showAnimateModal, setShowAnimateModal] = useState(false);
+	const [isConnected, setIsConnected] = useState(false);
+	const [batteryPct, setBatteryPct] = useState(0);
 
-	const [jointAngles, setJointAngles] = useState<Record<string, number>>(() =>
-		Object.fromEntries(JOINTS.map(j => [j.value, mockAngle(j.value, 0)]))
+	const [jointAngles, setJointAngles] = useState<Record<string, number>>(
+		() => Object.fromEntries(JOINTS.map(j => [j.value, 0]))
 	);
 	const [zeroOffsets, setZeroOffsets] = useState<Record<string, number>>({});
-	const [chartData, setChartData] = useState<Record<string, number[]>>(() =>
-		Object.fromEntries(ACTIVE_JOINTS.map(id => [id, Array(CHART_POINTS).fill(mockAngle(id, 0))]))
+	const [chartData, setChartData] = useState<Record<string, number[]>>(
+		() => Object.fromEntries(ACTIVE_JOINTS.map(id => [id, Array(CHART_POINTS).fill(0)]))
 	);
-	const [history, setHistory] = useState<HistorySession[]>([
-		{ timestamp: '14:32', joints: 'L.Elbow, R.Elbow', duration: '2m 14s', rate: '50Hz' },
-		{ timestamp: '14:15', joints: 'L.Knee, R.Knee',   duration: '1m 45s', rate: '50Hz' },
-		{ timestamp: '13:58', joints: 'L.Elbow, R.Elbow, L.Knee', duration: '3m 22s', rate: '50Hz' },
-	]);
+	const [history, setHistory] = useState<HistorySession[]>([]);
 
-	// Refs for use inside the interval (avoids stale closures)
-	const isHeldRef = useRef(false);
-	const isRecordingRef = useRef(false);
-	const zeroOffsetsRef = useRef<Record<string, number>>({});
+	const isHeldRef        = useRef(false);
+	const isRecordingRef   = useRef(false);
+	const zeroOffsetsRef   = useRef<Record<string, number>>({});
 	const recordingStartRef = useRef<number | null>(null);
-	const recordingDataRef = useRef<{ t: number; angles: Record<string, number> }[]>([]);
+	const recordingDataRef  = useRef<{ t: number; angles: Record<string, number> }[]>([]);
 
-	isHeldRef.current = isHeld;
+	isHeldRef.current      = isHeld;
 	isRecordingRef.current = isRecording;
 	zeroOffsetsRef.current = zeroOffsets;
 
+	// ── WebRTC connection ────────────────────────────────────────────────
 	useEffect(() => {
-		const interval = setInterval(() => {
-			if (isHeldRef.current) return;
-			const t = performance.now();
-			const newAngles: Record<string, number> = {};
-			JOINTS.forEach(j => {
-				const raw = mockAngle(j.value, t);
-				newAngles[j.value] = raw - (zeroOffsetsRef.current[j.value] ?? 0);
-			});
-			setJointAngles(newAngles);
-			setChartData(prev => {
-				const next: Record<string, number[]> = {};
-				ACTIVE_JOINTS.forEach(id => {
-					const buf = [...(prev[id] ?? []), newAngles[id]];
-					next[id] = buf.slice(-CHART_POINTS);
-				});
-				return next;
-			});
-			if (isRecordingRef.current) {
-				recordingDataRef.current.push({ t, angles: { ...newAngles } });
-			}
-		}, 1000 / samplingRate);
-		return () => clearInterval(interval);
-	}, [samplingRate]);
+		const client = new WebRTCClient({
+			onPacket: (readings: SensorReading[]) => {
+				if (isHeldRef.current) return;
 
+				// Use first reading's SoC as battery level
+				const soc = readings[0]?.soc_pct ?? batteryPct;
+				setBatteryPct(Math.round(soc));
+
+				// Build angle map for all 4 sensors
+				const newAngles: Record<string, number> = {};
+				readings.forEach(r => {
+					const jointId = ACTIVE_JOINTS[r.sensorIndex];
+					if (!jointId) return;
+					newAngles[jointId] = r.degrees - (zeroOffsetsRef.current[jointId] ?? 0);
+				});
+
+				setJointAngles(prev => ({ ...prev, ...newAngles }));
+				setChartData(prev => {
+					const next = { ...prev };
+					Object.entries(newAngles).forEach(([id, deg]) => {
+						const buf = [...(prev[id] ?? []), deg];
+						next[id] = buf.slice(-CHART_POINTS);
+					});
+					return next;
+				});
+
+				if (isRecordingRef.current) {
+					recordingDataRef.current.push({
+						t: performance.now(),
+						angles: { ...newAngles },
+					});
+				}
+			},
+			onConnected: () => {
+				setIsConnected(true);
+			},
+			onDisconnected: () => {
+				setIsConnected(false);
+			},
+		});
+
+		client.connect().catch(err => {
+			// Expected in dev; app falls back to mock data automatically
+			console.info('WebRTC unavailable, using mock data:', err.message);
+		});
+
+		return () => client.close();
+	}, []); // connect once on mount
+
+	// ── Handlers ──────────────────────────────────────────────────────────
 	const handleHold = () => setIsHeld(h => !h);
 
 	const handleSetZero = () => {
@@ -189,6 +195,8 @@ export function App() {
 					jointAngles={jointAngles}
 					chartData={chartData}
 					history={history}
+					batteryPct={batteryPct}
+					isConnected={isConnected}
 				/>
 			</S.MainLayout>
 		</S.Container>
