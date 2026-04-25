@@ -20,7 +20,8 @@ export interface HistorySession {
 }
 
 export function App() {
-	const [samplingRate, setSamplingRate] = useState(50);
+	const [framesPerPacket, setFramesPerPacket] = useState(1);
+	const [packetFreqHz, setPacketFreqHz] = useState(60);
 	const [isRecording, setIsRecording] = useState(false);
 	const [isHeld, setIsHeld] = useState(false);
 	const [selectedJoint, setSelectedJoint] = useState('left-elbow');
@@ -98,6 +99,19 @@ export function App() {
 		return () => client.close();
 	}, []); // connect once on mount
 
+	// ── Sync batch params to backend ──────────────────────────────────────
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			if (!isConnected) return;
+			fetch('/api/start', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ frames_per_packet: framesPerPacket, packet_freq_hz: packetFreqHz })
+			}).catch(err => console.warn('Failed to update batch params:', err));
+		}, 300);
+		return () => clearTimeout(timer);
+	}, [framesPerPacket, packetFreqHz, isConnected]);
+
 	// ── Handlers ──────────────────────────────────────────────────────────
 	const handleHold = () => setIsHeld(h => !h);
 
@@ -129,7 +143,7 @@ export function App() {
 				timestamp: ts,
 				joints,
 				duration: mins > 0 ? `${mins}m ${secs}s` : `${secs}s`,
-				rate: `${samplingRate}Hz`,
+				rate: `${framesPerPacket * packetFreqHz}Hz`,
 			}, ...prev]);
 		}
 	};
@@ -166,10 +180,12 @@ export function App() {
 							onJointChange={setSelectedJoint}
 						/>
 						<ControlPanelTop
-							samplingRate={samplingRate}
+							framesPerPacket={framesPerPacket}
+							packetFreqHz={packetFreqHz}
 							isRecording={isRecording}
 							isHeld={isHeld}
-							onSamplingRateChange={setSamplingRate}
+							onFramesPerPacketChange={setFramesPerPacket}
+							onPacketFreqChange={setPacketFreqHz}
 							onRecordingToggle={handleRecordingToggle}
 							onHold={handleHold}
 							onExport={handleExport}
@@ -179,7 +195,7 @@ export function App() {
 					<ChartVisualization
 						activeJoints={ACTIVE_JOINTS}
 						chartData={chartData}
-						samplingRate={samplingRate}
+						samplingRate={framesPerPacket * packetFreqHz}
 						onAnimateClick={() => setShowAnimateModal(true)}
 					/>
 				</S.LeftSection>

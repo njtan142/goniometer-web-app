@@ -13,32 +13,39 @@ export interface WebRTCClientOpts {
 	onDisconnected?: () => void;
 }
 
-/* Parse one 32-byte packet (4 sensors × 8 bytes, big-endian).
- * Bit layout per frame: [63:50]=angle [49:18]=µs_ts [17:10]=SoC [9:0]=flags */
-function parsePacket(buf: ArrayBuffer): SensorReading[] | null {
-	if (buf.byteLength < 32) return null;
+/* Parse a batched packet (N timesteps × 4 sensors × 8 bytes, big-endian).
+ * Returns one SensorReading[] per timestep. Handles both legacy single-frame
+ * packets (32 bytes) and multi-frame batches (N × 32 bytes).
+ * Bit layout per 8-byte frame: [63:50]=angle [49:18]=µs_ts [17:10]=SoC [9:0]=flags */
+function parsePacket(buf: ArrayBuffer): SensorReading[][] {
+	const timestepCount = Math.floor(buf.byteLength / 32);
+	if (timestepCount === 0) return [];
 	const view = new DataView(buf);
-	const readings: SensorReading[] = [];
-	for (let s = 0; s < 4; s++) {
-		const off  = s * 8;
-		const hi32 = view.getUint32(off, false);
-		const lo32 = view.getUint32(off + 4, false);
-		const angle_raw = (hi32 >>> 18) & 0x3fff;
-		// 32-bit timestamp spans both words; use multiplication to avoid JS signed overflow
-		const ts_hi     = (hi32 & 0x3ffff) >>> 0;   // bits 49–32 (18 bits)
-		const ts_lo     = (lo32 >>> 18) >>> 0;       // bits 31–18 (14 bits)
-		const timestamp = (ts_hi * 0x4000 + ts_lo) >>> 0;
-		const soc       = (lo32 >>> 10) & 0xff;
-		const flags     = lo32 & 0x3ff;
-		readings.push({
-			sensorIndex: s,
-			degrees:   angle_raw * (360.0 / 16384.0),
-			soc_pct:   soc * (100.0 / 255.0),
-			flags,
-			timestamp,
-		});
+	const result: SensorReading[][] = [];
+	for (let t = 0; t < timestepCount; t++) {
+		const readings: SensorReading[] = [];
+		for (let s = 0; s < 4; s++) {
+			const off   = t * 32 + s * 8;
+			const hi32  = view.getUint32(off, false);
+			const lo32  = view.getUint32(off + 4, false);
+			const angle_raw = (hi32 >>> 18) & 0x3fff;
+			// 32-bit timestamp spans both words; multiply to avoid JS signed overflow
+			const ts_hi     = (hi32 & 0x3ffff) >>> 0;   // bits 49–32 (18 bits)
+			const ts_lo     = (lo32 >>> 18) >>> 0;       // bits 31–18 (14 bits)
+			const timestamp = (ts_hi * 0x4000 + ts_lo) >>> 0;
+			const soc       = (lo32 >>> 10) & 0xff;
+			const flags     = lo32 & 0x3ff;
+			readings.push({
+				sensorIndex: s,
+				degrees:   angle_raw * (360.0 / 16384.0),
+				soc_pct:   soc * (100.0 / 255.0),
+				flags,
+				timestamp,
+			});
+		}
+		result.push(readings);
 	}
-	return readings;
+	return result;
 }
 
 function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 4000): Promise<void> {
@@ -113,23 +120,25 @@ export class WebRTCClient {
 		let pktCount = 0;
 		let lastLogTime = 0;
 		this.dc.onmessage = (e: MessageEvent<ArrayBuffer>) => {
-			const readings = parsePacket(e.data);
-			if (!readings) return;
+			const batches = parsePacket(e.data);
+			if (batches.length === 0) return;
 			pktCount++;
 			const now = performance.now();
 			if (now - lastLogTime >= 2000) {
-				const r = readings[0];
+				const r = batches[batches.length - 1][0];
 				console.log(
-					`[WebRTC] rx ${pktCount} pkts — ` +
-					`L.Elbow=${readings[0].degrees.toFixed(1)}° ` +
-					`R.Elbow=${readings[1].degrees.toFixed(1)}° ` +
-					`L.Knee=${readings[2].degrees.toFixed(1)}° ` +
-					`R.Knee=${readings[3].degrees.toFixed(1)}° ` +
+					`[WebRTC] rx ${pktCount} pkts (${batches.length} frames/pkt) — ` +
+					`L.Elbow=${batches[0][0].degrees.toFixed(1)}° ` +
+					`R.Elbow=${batches[0][1].degrees.toFixed(1)}° ` +
+					`L.Knee=${batches[0][2].degrees.toFixed(1)}° ` +
+					`R.Knee=${batches[0][3].degrees.toFixed(1)}° ` +
 					`SoC=${r.soc_pct.toFixed(1)}%`
 				);
 				lastLogTime = now;
 			}
-			this.opts.onPacket(readings);
+			for (const readings of batches) {
+				this.opts.onPacket(readings);
+			}
 		};
 
 		console.log('[WebRTC] creating offer…');

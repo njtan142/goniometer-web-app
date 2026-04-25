@@ -1,10 +1,12 @@
 import * as S from '../styles';
 
 interface ControlPanelTopProps {
-	samplingRate: number;
+	framesPerPacket: number;
+	packetFreqHz: number;
 	isRecording: boolean;
 	isHeld: boolean;
-	onSamplingRateChange: (rate: number) => void;
+	onFramesPerPacketChange: (v: number) => void;
+	onPacketFreqChange: (v: number) => void;
 	onRecordingToggle: () => void;
 	onHold: () => void;
 	onExport: () => void;
@@ -12,28 +14,44 @@ interface ControlPanelTopProps {
 }
 
 export function ControlPanelTop({
-	samplingRate,
+	framesPerPacket,
+	packetFreqHz,
 	isRecording,
 	isHeld,
-	onSamplingRateChange,
+	onFramesPerPacketChange,
+	onPacketFreqChange,
 	onRecordingToggle,
 	onHold,
 	onExport,
 	onSetZero,
 }: ControlPanelTopProps) {
+	const totalHz = framesPerPacket * packetFreqHz;
 	return (
 		<S.ControlPanelTop>
 			<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 				<S.ControlGroup>
-					<label>Rate:</label>
+					<label>Frames/pkt:</label>
+					<S.RangeInput
+						min="1"
+						max="46"
+						value={framesPerPacket}
+						onChange={e => onFramesPerPacketChange(Number(e.target.value))}
+					/>
+					<span style={{ fontSize: '13px', color: 'var(--text-main)', minWidth: '28px' }}>{framesPerPacket}</span>
+				</S.ControlGroup>
+				<S.ControlGroup>
+					<label>Pkt freq:</label>
 					<S.RangeInput
 						min="10"
-						max="100"
-						value={samplingRate}
-						onChange={e => onSamplingRateChange(Number(e.target.value))}
+						max="400"
+						value={packetFreqHz}
+						onChange={e => onPacketFreqChange(Number(e.target.value))}
 					/>
-					<span style={{ fontSize: '13px', color: 'var(--text-main)', minWidth: '40px' }}>{samplingRate}Hz</span>
+					<span style={{ fontSize: '13px', color: 'var(--text-main)', minWidth: '40px' }}>{packetFreqHz}Hz</span>
 				</S.ControlGroup>
+				<div style={{ fontSize: '12px', color: 'var(--text-main)', opacity: 0.7 }}>
+					Total: {totalHz} readings/s
+				</div>
 
 				<div style={{ display: 'flex', gap: '8px' }}>
 					<S.Button
