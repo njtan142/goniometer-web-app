@@ -1,16 +1,49 @@
+// Active sensor joints — matches ESP32 k_joint_name[MT6701_NUM_SENSORS] order (index 0–3)
+export const ACTIVE_JOINTS = ['knee-central', 'hip-yaw', 'hip-pitch', 'ankle-yaw'];
+
+// Rolling-window size for the live chart (number of data points shown by default)
+export const CHART_POINTS = 29;
+
+// Ring-buffer size cap for liveHistoryRef.  Large enough for ~2.7 s at max rate
+// (46 frames × 400 Hz = 18 400 fps).  Trimmed with in-place splice, not slice.
+export const LIVE_HISTORY_CAP = 50_000;
+
+// Maximum data points forwarded to ChartVisualization in live mode.
+// Prevents mapping a 50 k-element array before ChartVisualization re-slices it.
+export const MAX_CHART_DISPLAY_PTS = 5_000;
+
+export interface HistorySession {
+	timestamp: string;
+	joints: string;
+	duration: string;
+	rate: string;
+	/** Raw recording frames — present when the session was recorded in this browser tab or imported from JSON */
+	rawData?: { t: number; angles: Record<string, number> }[];
+}
+
 export const JOINTS = [
-	{ value: 'left-elbow', label: 'Left Elbow', type: 'elbow' },
-	{ value: 'right-elbow', label: 'Right Elbow', type: 'elbow' },
-	{ value: 'left-knee', label: 'Left Knee', type: 'knee' },
-	{ value: 'right-knee', label: 'Right Knee', type: 'knee' },
-	{ value: 'left-shoulder', label: 'Left Shoulder', type: 'shoulder' },
+
+	// Sensor 0 – MT6701 index 0
+	{ value: 'knee-central', label: 'Knee (central)', type: 'knee' },
+	// Sensor 1 – MT6701 index 1
+	{ value: 'hip-yaw',     label: 'Hip-yaw',        type: 'hip' },
+	// Sensor 2 – MT6701 index 2
+	{ value: 'hip-pitch',   label: 'Hip-pitch',       type: 'hip' },
+	// Sensor 3 – MT6701 index 3
+	{ value: 'ankle-yaw',   label: 'Ankle-yaw',       type: 'ankle' },
+	// Legacy joints kept for JSON import compatibility
+	{ value: 'left-elbow',     label: 'Left Elbow',     type: 'elbow' },
+	{ value: 'right-elbow',    label: 'Right Elbow',    type: 'elbow' },
+	{ value: 'left-knee',      label: 'Left Knee',      type: 'knee' },
+	{ value: 'right-knee',     label: 'Right Knee',     type: 'knee' },
+	{ value: 'left-shoulder',  label: 'Left Shoulder',  type: 'shoulder' },
 	{ value: 'right-shoulder', label: 'Right Shoulder', type: 'shoulder' },
-	{ value: 'left-hip', label: 'Left Hip', type: 'hip' },
-	{ value: 'right-hip', label: 'Right Hip', type: 'hip' },
-	{ value: 'left-wrist', label: 'Left Wrist', type: 'wrist' },
-	{ value: 'right-wrist', label: 'Right Wrist', type: 'wrist' },
-	{ value: 'left-ankle', label: 'Left Ankle', type: 'ankle' },
-	{ value: 'right-ankle', label: 'Right Ankle', type: 'ankle' },
+	{ value: 'left-hip',       label: 'Left Hip',       type: 'hip' },
+	{ value: 'right-hip',      label: 'Right Hip',      type: 'hip' },
+	{ value: 'left-wrist',     label: 'Left Wrist',     type: 'wrist' },
+	{ value: 'right-wrist',    label: 'Right Wrist',    type: 'wrist' },
+	{ value: 'left-ankle',     label: 'Left Ankle',     type: 'ankle' },
+	{ value: 'right-ankle',    label: 'Right Ankle',    type: 'ankle' },
 ];
 
 export const NORMATIVE_RANGES = {
@@ -23,18 +56,24 @@ export const NORMATIVE_RANGES = {
 };
 
 export const JOINT_COLORS = {
-	'left-elbow': '#2196f3',
-	'right-elbow': '#ff9800',
-	'left-knee': '#4caf50',
-	'right-knee': '#f44336',
-	'left-shoulder': '#9c27b0',
+	// Active sensor joints
+	'knee-central': '#2196f3', // blue
+	'hip-yaw':      '#ff9800', // orange
+	'hip-pitch':    '#4caf50', // green
+	'ankle-yaw':    '#f44336', // red
+	// Legacy
+	'left-elbow':     '#2196f3',
+	'right-elbow':    '#ff9800',
+	'left-knee':      '#4caf50',
+	'right-knee':     '#f44336',
+	'left-shoulder':  '#9c27b0',
 	'right-shoulder': '#673ab7',
-	'left-hip': '#ffeb3b',
-	'right-hip': '#ffc107',
-	'left-wrist': '#00bcd4',
-	'right-wrist': '#009688',
-	'left-ankle': '#e91e63',
-	'right-ankle': '#9c27b0',
+	'left-hip':       '#ffeb3b',
+	'right-hip':      '#ffc107',
+	'left-wrist':     '#00bcd4',
+	'right-wrist':    '#009688',
+	'left-ankle':     '#e91e63',
+	'right-ankle':    '#9c27b0',
 };
 
 export const JOINT_DATA = {

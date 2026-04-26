@@ -17,10 +17,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, '../dist');
 const espDir = path.join(__dirname, '../dist-esp32');
 
-// Create output directory
-if (!fs.existsSync(espDir)) {
-	fs.mkdirSync(espDir, { recursive: true });
+// Always wipe and recreate the output directory so stale chunks from
+// previous builds never accumulate and overflow the SPIFFS partition.
+if (fs.existsSync(espDir)) {
+	fs.rmSync(espDir, { recursive: true, force: true });
 }
+fs.mkdirSync(espDir, { recursive: true });
 
 // Ensure dist exists
 if (!fs.existsSync(distDir)) {

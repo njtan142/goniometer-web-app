@@ -70,6 +70,13 @@ export default defineConfig({
 				entryFileNames: '[hash].js',
 				assetFileNames: 'a/[name][extname]',
 				compact: true,
+				// Consolidate Three.js and its examples into ONE vendor chunk so
+				// Rollup doesn't fragment it into 40+ micro-chunks that fill SPIFFS.
+				manualChunks(id) {
+					if (id.includes('three')) {
+						return 'three';
+					}
+				},
 			},
 		},
 		// Reduce sourcemaps or disable for production
@@ -77,3 +84,4 @@ export default defineConfig({
 		reportCompressedSize: true,
 	},
 });
+

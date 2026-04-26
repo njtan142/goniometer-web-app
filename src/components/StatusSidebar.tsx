@@ -1,6 +1,6 @@
 import * as S from '../styles';
 import { JOINTS } from '../constants/joints';
-import { HistorySession } from './App';
+import { HistorySession } from '../constants/joints';
 
 interface StatusSidebarProps {
 	activeJoints: string[];
@@ -52,8 +52,8 @@ export function StatusSidebar({
 						{activeJoints.slice(0, 4).map((jointId, i) => {
 							const joint = JOINTS.find(j => j.value === jointId);
 							const angles = chartData[jointId] ?? [];
-							const min = angles.length ? Math.min(...angles) : 0;
-							const max = angles.length ? Math.max(...angles) : 0;
+							const min = angles.length ? angles.reduce((a, v) => Math.min(a, v), Infinity) : 0;
+							const max = angles.length ? angles.reduce((a, v) => Math.max(a, v), -Infinity) : 0;
 							const rom = max - min;
 							const isLast = i === Math.min(activeJoints.length, 4) - 1;
 							return (

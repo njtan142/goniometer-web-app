@@ -7,21 +7,10 @@ import { PlaybackPanel } from './PlaybackPanel';
 import { ChartVisualization } from './ChartVisualization';
 import { AnimateModal } from './AnimateModal';
 import { StatusSidebar } from './StatusSidebar';
-import { JOINTS, JOINT_COLORS, NORMATIVE_RANGES } from '../constants/joints';
+import { JOINTS, JOINT_COLORS, NORMATIVE_RANGES, ACTIVE_JOINTS, LIVE_HISTORY_CAP, MAX_CHART_DISPLAY_PTS, CHART_POINTS, HistorySession } from '../constants/joints';
 import { WebRTCClient, SensorReading } from '../lib/webrtc';
 import { WSClient } from '../lib/ws';
 
-export const CHART_POINTS = 29;
-export const ACTIVE_JOINTS = ['left-elbow', 'right-elbow', 'left-knee', 'right-knee'];
-
-export interface HistorySession {
-	timestamp: string;
-	joints: string;
-	duration: string;
-	rate: string;
-	/** Raw recording frames — present when the session was recorded in this browser tab or imported from JSON */
-	rawData?: { t: number; angles: Record<string, number> }[];
-}
 
 export function App() {
 	const [framesPerPacket, setFramesPerPacket] = useState(1);
@@ -29,7 +18,7 @@ export function App() {
 	const [mode, setMode] = useState<'live' | 'record'>('live');
 	const [isRecording, setIsRecording] = useState(false);
 	const [isHeld, setIsHeld] = useState(false);
-	const [selectedJoint, setSelectedJoint] = useState('left-elbow');
+	const [selectedJoint, setSelectedJoint] = useState('knee-central');
 	const [showAnimateModal, setShowAnimateModal] = useState(false);
 	const [isConnected, setIsConnected] = useState(false);
 	const [batteryPct, setBatteryPct] = useState(0);
@@ -48,14 +37,23 @@ export function App() {
 	const [playbackSession, setPlaybackSession] = useState<HistorySession | null>(null);
 	const [playbackFrameIdx, setPlaybackFrameIdx] = useState(0);
 
-	const isHeldRef          = useRef(false);
-	const isRecordingRef     = useRef(false);
-	const zeroOffsetsRef     = useRef<Record<string, number>>({});
-	const recordingStartRef  = useRef<number | null>(null);
+	const isHeldRef = useRef(false);
+	const isRecordingRef = useRef(false);
+	const zeroOffsetsRef = useRef<Record<string, number>>({});
+	const recordingStartRef = useRef<number | null>(null);
 	const recordingDataRef   = useRef<{ t: number; angles: Record<string, number> }[]>([]);
 	const playbackSessionRef = useRef<HistorySession | null>(null);
-	// Accumulates every live frame (firmware µs timestamp) — never capped, enables full zoom-out
+	// Ring buffer: accumulates live frames for zoom-out. Capped at LIVE_HISTORY_CAP
+	// using in-place splice (not slice) to avoid 50k-element array allocations every
+	// packet — those cause GC pauses that look exactly like "processing all data".
 	const liveHistoryRef     = useRef<{ t: number; angles: Record<string, number> }[]>([]);
+	// Latest live snapshot written by handlePacket. The rAF loop reads these and
+	// commits to React state at ~60 fps — handlePacket itself makes ZERO setState
+	// calls, preventing the event-loop backlog that caused stale-data rendering.
+	const latestAnglesRef     = useRef<Record<string, number>>({});
+	const latestBatteryRef    = useRef(0);
+	const latestFirmwareTsRef = useRef(0);
+	const rafIdRef            = useRef<number | null>(null);
 
 	isHeldRef.current          = isHeld;
 	isRecordingRef.current     = isRecording;
@@ -71,7 +69,10 @@ export function App() {
 		}
 		const hist = liveHistoryRef.current;
 		if (hist.length === 0) return chartData;
-		return Object.fromEntries(ACTIVE_JOINTS.map(id => [id, hist.map(d => d.angles[id] ?? 0)]));
+		// Slice to display cap BEFORE mapping so we never build a 50k-entry array
+		// and hand it to ChartVisualization which would immediately re-slice it.
+		const visible = hist.slice(-MAX_CHART_DISPLAY_PTS);
+		return Object.fromEntries(ACTIVE_JOINTS.map(id => [id, visible.map(d => d.angles[id] ?? 0)]));
 	}, [playbackSession, playbackFrameIdx, chartData]);
 
 	const displayTimestamps = useMemo(() => {
@@ -81,7 +82,8 @@ export function App() {
 		}
 		const hist = liveHistoryRef.current;
 		if (hist.length === 0) return chartTimestamps;
-		return hist.map(d => d.t); // firmware µs
+		// Match the same cap so indices stay aligned with displayChartData.
+		return hist.slice(-MAX_CHART_DISPLAY_PTS).map(d => d.t); // firmware µs
 	}, [playbackSession, playbackFrameIdx, chartTimestamps]);
 
 	const displayJointAngles = useMemo(() => {
@@ -92,36 +94,45 @@ export function App() {
 	}, [playbackSession, playbackFrameIdx, jointAngles]);
 
 	// ── Shared packet handler ─────────────────────────────────────────────
+	// Called up to N×packet_freq times/sec (e.g. 18 400 at 46f×400Hz OR 400
+	// at 1f×400Hz).  This function MUST NOT call setState — every setState
+	// schedules a re-render; at even 400 calls/sec the event loop backlogs
+	// and the browser renders stale data instead of the latest reading.
+	// All display updates are batched by the rAF loop below (~60 fps).
 	const handlePacket = (readings: SensorReading[]) => {
-		// Drop live data while in playback mode or held
 		if (isHeldRef.current || playbackSessionRef.current) return;
-		const soc = readings[0]?.soc_pct ?? 0;
-		setBatteryPct(Math.round(soc));
-		const firmwareTs = readings[0]?.timestamp ?? 0; // µs
+
+		const firmwareTs = readings[0]?.timestamp ?? 0;
+		const soc        = readings[0]?.soc_pct    ?? 0;
+
 		const newAngles: Record<string, number> = {};
 		readings.forEach(r => {
 			const jointId = ACTIVE_JOINTS[r.sensorIndex];
 			if (!jointId) return;
 			newAngles[jointId] = r.degrees - (zeroOffsetsRef.current[jointId] ?? 0);
 		});
-		liveHistoryRef.current.push({ t: firmwareTs, angles: { ...newAngles } });
-		setJointAngles(prev => ({ ...prev, ...newAngles }));
-		setChartData(prev => {
-			const next = { ...prev };
-			Object.entries(newAngles).forEach(([id, deg]) => {
-				next[id] = [...(prev[id] ?? []), deg].slice(-CHART_POINTS);
-			});
-			return next;
-		});
-		setChartTimestamps(prev => [...prev, firmwareTs].slice(-CHART_POINTS));
+
+		// Write to refs only — zero renders triggered here.
+		latestBatteryRef.current    = Math.round(soc);
+		latestFirmwareTsRef.current = firmwareTs;
+		Object.assign(latestAnglesRef.current, newAngles);
+
+		// Ring buffer — trim with in-place splice rather than slice().
+		// slice() creates a fresh 50 k-element array every call once the cap is
+		// reached; at 400 calls/sec that's 400 GC'd 50k arrays per second
+		// (the actual cause of the 1-frame/pkt regression).
+		const hist = liveHistoryRef.current;
+		hist.push({ t: firmwareTs, angles: { ...newAngles } });
+		if (hist.length > LIVE_HISTORY_CAP) {
+			hist.splice(0, hist.length - LIVE_HISTORY_CAP);
+		}
+
 		if (isRecordingRef.current) {
 			recordingDataRef.current.push({ t: performance.now(), angles: { ...newAngles } });
 		}
 	};
 
 	// ── Live mode: WebRTC (LFLL) ────────────────────────────────────────
-	// Also gated on playbackSession: entering playback disconnects WebRTC so it
-	// frees up resources, and the cleanup + re-run reconnects when playback exits.
 	useEffect(() => {
 		if (mode !== 'live') return;
 		if (playbackSession !== null) return;
@@ -136,6 +147,41 @@ export function App() {
 		return () => { client.close(); setIsConnected(false); };
 	}, [mode, playbackSession]);
 
+	// ── rAF render loop (live mode only) ────────────────────────────────
+	// Commits buffered ref state to React at display rate (~60 fps).
+	// handlePacket may fire hundreds or tens-of-thousands of times/sec but
+	// this loop ensures at most 1 setState batch per animation frame,
+	// always reflecting the LATEST data rather than a backlogged queue.
+	useEffect(() => {
+		if (mode !== 'live' || playbackSession !== null) return;
+
+		const tick = () => {
+			const angles = latestAnglesRef.current;
+			if (Object.keys(angles).length > 0) {
+				const ts  = latestFirmwareTsRef.current;
+				const bat = latestBatteryRef.current;
+				const snapshot = { ...angles };
+				// Single batched setState commit per animation frame
+				setBatteryPct(bat);
+				setJointAngles(prev => ({ ...prev, ...snapshot }));
+				setChartData(prev => {
+					const next = { ...prev };
+					Object.entries(snapshot).forEach(([id, deg]) => {
+						next[id] = [...(prev[id] ?? []), deg].slice(-CHART_POINTS);
+					});
+					return next;
+				});
+				setChartTimestamps(prev => [...prev, ts].slice(-CHART_POINTS));
+			}
+			rafIdRef.current = requestAnimationFrame(tick);
+		};
+
+		rafIdRef.current = requestAnimationFrame(tick);
+		return () => {
+			if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+		};
+	}, [mode, playbackSession]);
+
 	// ── Record mode: WebSocket (HFHL) ───────────────────────────────────
 	useEffect(() => {
 		if (mode !== 'record') return;
@@ -143,7 +189,7 @@ export function App() {
 		const timer = setTimeout(() => {
 			client = new WSClient({
 				onPacket: handlePacket,
-				onConnected:    () => setIsConnected(true),
+				onConnected: () => setIsConnected(true),
 				onDisconnected: () => {
 					setIsConnected(false);
 					if (isRecordingRef.current) {
@@ -205,7 +251,7 @@ export function App() {
 
 	const handleRecordingToggle = () => {
 		if (!isRecording) {
-			fetch('/api/stop', { method: 'POST' }).catch(() => {});
+			fetch('/api/stop', { method: 'POST' }).catch(() => { });
 			recordingStartRef.current = performance.now();
 			recordingDataRef.current = [];
 			isRecordingRef.current = true;
@@ -252,14 +298,14 @@ export function App() {
 		const baselineT = data[0].t;
 		const exported = {
 			metadata: {
-				exportedAt:  new Date().toISOString(),
-				joints:      ACTIVE_JOINTS,
+				exportedAt: new Date().toISOString(),
+				joints: ACTIVE_JOINTS,
 				samplingRate: framesPerPacket * packetFreqHz,
-				durationMs:  +(data[data.length - 1].t - baselineT).toFixed(1),
+				durationMs: +(data[data.length - 1].t - baselineT).toFixed(1),
 			},
 			frames: data.map(d => ({
 				relativeMs: +(d.t - baselineT).toFixed(1),
-				angles:     Object.fromEntries(ACTIVE_JOINTS.map(id => [id, +(d.angles[id] ?? 0).toFixed(2)])),
+				angles: Object.fromEntries(ACTIVE_JOINTS.map(id => [id, +(d.angles[id] ?? 0).toFixed(2)])),
 			})),
 		};
 		const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
@@ -281,11 +327,11 @@ export function App() {
 					throw new Error('Invalid format — missing metadata.joints or frames array');
 				}
 				const rawData = (parsed.frames as { relativeMs: number; angles: Record<string, number> }[]).map(f => ({
-					t:      f.relativeMs,
+					t: f.relativeMs,
 					angles: f.angles,
 				}));
 				const durationMs = parsed.metadata.durationMs ?? 0;
-				const totalSecs  = Math.round(durationMs / 1000);
+				const totalSecs = Math.round(durationMs / 1000);
 				const mins = Math.floor(totalSecs / 60);
 				const secs = totalSecs % 60;
 				const joints = (parsed.metadata.joints as string[]).map((id: string) => {
@@ -296,7 +342,7 @@ export function App() {
 					timestamp: file.name.replace(/\.[^.]+$/, '').slice(0, 20),
 					joints,
 					duration: mins > 0 ? `${mins}m ${secs}s` : `${secs}s`,
-					rate:     `${parsed.metadata.samplingRate}Hz`,
+					rate: `${parsed.metadata.samplingRate}Hz`,
 					rawData,
 				};
 				setHistory(prev => [session, ...prev]);
@@ -314,22 +360,22 @@ export function App() {
 			return;
 		}
 
-		const rawData  = playbackSession.rawData;
-		const baseT    = rawData[0].t;
-		const totalMs  = rawData[rawData.length - 1].t - baseT;
+		const rawData = playbackSession.rawData;
+		const baseT = rawData[0].t;
+		const totalMs = rawData[rawData.length - 1].t - baseT;
 
 		// Downsample to at most 400 chart points to keep the PDF fast and lean
-		const MAX_PTS  = 400;
-		const step     = Math.max(1, Math.ceil(rawData.length / MAX_PTS));
+		const MAX_PTS = 400;
+		const step = Math.max(1, Math.ceil(rawData.length / MAX_PTS));
 		const chartPts = rawData.filter((_, i) => i % step === 0 || i === rawData.length - 1);
 
 		// Per-joint stats over the full (non-downsampled) recording
 		const stats: Record<string, { min: number; max: number; rom: number }> = {};
 		ACTIVE_JOINTS.forEach(id => {
 			const vals = rawData.map(d => d.angles[id] ?? 0);
-			const min  = vals.reduce((a, v) => Math.min(a, v), Infinity);
-			const max  = vals.reduce((a, v) => Math.max(a, v), -Infinity);
-			stats[id]  = { min, max, rom: max - min };
+			const min = vals.reduce((a, v) => Math.min(a, v), Infinity);
+			const max = vals.reduce((a, v) => Math.max(a, v), -Infinity);
+			stats[id] = { min, max, rom: max - min };
 		});
 
 		// Joint types present in the recording (for normative bands)
@@ -339,12 +385,12 @@ export function App() {
 
 		// Pre-computed "rgba on white" blended fill colors for each joint type
 		const BAND_COLORS: Record<string, [number, number, number]> = {
-			elbow:    [218, 232, 255],
-			knee:     [225, 252, 239],
+			elbow: [218, 232, 255],
+			knee: [225, 252, 239],
 			shoulder: [247, 212, 253],
-			hip:      [255, 249, 210],
-			wrist:    [210, 254, 255],
-			ankle:    [255, 220, 220],
+			hip: [255, 249, 210],
+			wrist: [210, 254, 255],
+			ankle: [255, 220, 220],
 		};
 
 		const hexToRgb = (hex: string): [number, number, number] => [
@@ -357,8 +403,8 @@ export function App() {
 		const CL = 25, CR = 190, CT = 118, CB = 196;
 		const CW = CR - CL, CH = CB - CT;
 		// angle=0° → bottom of chart; angle=180° → top
-		const px = (relT: number)   => CL + (relT / (totalMs || 1)) * CW;
-		const py = (angle: number)  => CB - Math.max(0, Math.min(1, angle / 180)) * CH;
+		const px = (relT: number) => CL + (relT / (totalMs || 1)) * CW;
+		const py = (angle: number) => CB - Math.max(0, Math.min(1, angle / 180)) * CH;
 
 		const doc = new jsPDF('p', 'mm', 'a4');
 
@@ -438,7 +484,7 @@ export function App() {
 		sortedTypes.forEach(type => {
 			const range = NORMATIVE_RANGES[type as keyof typeof NORMATIVE_RANGES];
 			if (!range) return;
-			const rgb     = BAND_COLORS[type] ?? [230, 230, 230];
+			const rgb = BAND_COLORS[type] ?? [230, 230, 230];
 			const bandTop = py(range.max);
 			const bandBot = py(range.min);
 			doc.setFillColor(rgb[0], rgb[1], rgb[2]);
@@ -462,8 +508,8 @@ export function App() {
 
 		// X-axis time ticks
 		[0, 0.25, 0.5, 0.75, 1.0].forEach(frac => {
-			const relT  = frac * totalMs;
-			const xPos  = CL + frac * CW;
+			const relT = frac * totalMs;
+			const xPos = CL + frac * CW;
 			const label = relT < 1000 ? `${Math.round(relT)}ms` : `${(relT / 1000).toFixed(1)}s`;
 			doc.setDrawColor(210, 210, 210);
 			doc.setLineWidth(0.2);
@@ -476,8 +522,8 @@ export function App() {
 
 		// ── Per-joint: polyline + out-of-range markers ────────────────────
 		ACTIVE_JOINTS.forEach(id => {
-			const joint    = JOINTS.find(j => j.value === id);
-			const range    = joint ? NORMATIVE_RANGES[joint.type as keyof typeof NORMATIVE_RANGES] : null;
+			const joint = JOINTS.find(j => j.value === id);
+			const range = joint ? NORMATIVE_RANGES[joint.type as keyof typeof NORMATIVE_RANGES] : null;
 			const [r, g, b] = hexToRgb(JOINT_COLORS[id as keyof typeof JOINT_COLORS] ?? '#888888');
 
 			// Polyline — thin lines with round joins for smooth PDF rendering
@@ -536,7 +582,7 @@ export function App() {
 		lx = CL;
 		sortedTypes.forEach(type => {
 			const range = NORMATIVE_RANGES[type as keyof typeof NORMATIVE_RANGES];
-			const rgb   = BAND_COLORS[type] ?? [230, 230, 230];
+			const rgb = BAND_COLORS[type] ?? [230, 230, 230];
 			doc.setFillColor(rgb[0], rgb[1], rgb[2]);
 			doc.rect(lx, LY2 - 2.5, 5, 2.5, 'F');
 			doc.setDrawColor(150, 150, 150);
@@ -641,8 +687,7 @@ export function App() {
 				<AnimateModal
 					isOpen={showAnimateModal}
 					onClose={() => setShowAnimateModal(false)}
-					targetJoint='leftElbow'
-					liveAngle={displayJointAngles['left-elbow']}
+					jointAngles={displayJointAngles}
 				/>
 
 				<StatusSidebar

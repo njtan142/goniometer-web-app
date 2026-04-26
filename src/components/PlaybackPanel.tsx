@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'preact/hooks';
 import * as S from '../styles';
-import { HistorySession } from './App';
+import { HistorySession } from '../constants/joints';
 
 interface PlaybackPanelProps {
 	session: HistorySession;
@@ -9,9 +9,10 @@ interface PlaybackPanelProps {
 	onClose: () => void;
 	onExportCSV: () => void;
 	onGeneratePDF: () => void;
+	onAnimateClick?: () => void;
 }
 
-export function PlaybackPanel({ session, currentFrame, onFrameChange, onClose, onExportCSV, onGeneratePDF }: PlaybackPanelProps) {
+export function PlaybackPanel({ session, currentFrame, onFrameChange, onClose, onExportCSV, onGeneratePDF, onAnimateClick }: PlaybackPanelProps) {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [speed, setSpeed] = useState(1);
 
@@ -137,6 +138,9 @@ export function PlaybackPanel({ session, currentFrame, onFrameChange, onClose, o
 					</S.Button>
 					<S.Button className="secondary" onClick={onExportCSV}>CSV</S.Button>
 					<S.Button className="secondary" onClick={onGeneratePDF}>PDF</S.Button>
+					{onAnimateClick && (
+						<S.Button className="secondary" onClick={onAnimateClick}>Animate</S.Button>
+					)}
 					<S.Button className="secondary" onClick={onClose}>Exit</S.Button>
 				</div>
 			</div>

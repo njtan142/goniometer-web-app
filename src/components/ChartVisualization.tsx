@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
 import * as S from '../styles';
-import { JOINTS, JOINT_COLORS, NORMATIVE_RANGES } from '../constants/joints';
-import { CHART_POINTS } from './App';
+import { JOINTS, JOINT_COLORS, NORMATIVE_RANGES, MAX_CHART_DISPLAY_PTS, CHART_POINTS } from '../constants/joints';
+
 
 interface ChartVisualizationProps {
 	activeJoints: string[];
@@ -15,8 +15,8 @@ export function ChartVisualization({ activeJoints, chartData, chartTimestamps, s
 	const [visibleJoints, setVisibleJoints] = useState<string[]>(activeJoints);
 	// visibleCount: how many trailing points to render; scroll wheel shrinks/grows this
 	const [visibleCount, setVisibleCount] = useState(CHART_POINTS);
-	const chartWrapRef  = useRef<HTMLDivElement>(null);
-	const chartDataRef  = useRef(chartData);
+	const chartWrapRef = useRef<HTMLDivElement>(null);
+	const chartDataRef = useRef(chartData);
 	chartDataRef.current = chartData;
 
 	useEffect(() => {
@@ -30,11 +30,12 @@ export function ChartVisualization({ activeJoints, chartData, chartTimestamps, s
 		if (!el) return;
 		const handler = (e: WheelEvent) => {
 			e.preventDefault();
-			// Scroll up (deltaY < 0) = zoom in = fewer points
-			// Scroll down (deltaY > 0) = zoom out = more points
 			const step = Math.ceil(Math.abs(e.deltaY) / 100) * 10;
 			setVisibleCount(prev => {
-				const maxPts = Math.max(...Object.values(chartDataRef.current).map(a => a.length), CHART_POINTS);
+				const vals = Object.values(chartDataRef.current ?? {});
+				const maxPts = vals.length
+					? vals.reduce((m, a) => Math.max(m, a.length), CHART_POINTS)
+					: CHART_POINTS;
 				return Math.max(5, Math.min(maxPts, prev + (e.deltaY > 0 ? step : -step)));
 			});
 		};
@@ -50,12 +51,15 @@ export function ChartVisualization({ activeJoints, chartData, chartTimestamps, s
 
 	const getY = (deg: number) => 250 - (deg * (200 / 180));
 
-	// Derive the sliced data and timestamps for the visible window
+	const safeChartData: Record<string, number[]> = chartData ?? {};
 	const slicedData = Object.fromEntries(
-		Object.entries(chartData).map(([id, angles]) => [id, angles.slice(-visibleCount)])
+		Object.entries(safeChartData).map(([id, angles]) => [id, angles.slice(-visibleCount)])
 	);
 	const slicedTimestamps = chartTimestamps.slice(-visibleCount);
-	const pointCount = Math.max(...Object.values(slicedData).map(a => a.length), 1);
+	const slicedVals = Object.values(slicedData);
+	const pointCount = slicedVals.length
+		? slicedVals.reduce((m, a) => Math.max(m, a.length), 1)
+		: 1;
 
 	const toPoints = (angles: number[]): string =>
 		angles.map((deg, i) => {
@@ -66,7 +70,7 @@ export function ChartVisualization({ activeJoints, chartData, chartTimestamps, s
 
 	// X-axis: nice time-interval ticks derived from actual timestamps
 	const firstRealTs = slicedTimestamps.find(t => t > 0) ?? 0;
-	const lastRealTs  = [...slicedTimestamps].reverse().find(t => t > 0) ?? 0;
+	const lastRealTs = [...slicedTimestamps].reverse().find(t => t > 0) ?? 0;
 	const totalRangeMs = (firstRealTs > 0 && lastRealTs > firstRealTs)
 		? (lastRealTs - firstRealTs) / 1000 : 0;
 
@@ -116,7 +120,7 @@ export function ChartVisualization({ activeJoints, chartData, chartTimestamps, s
 		const step = 360 / total;
 		const hue = (baseHue + index * step) % 360;
 		return {
-			bg:   `hsla(${hue}, 50%, 75%, 1)`,
+			bg: `hsla(${hue}, 50%, 75%, 1)`,
 			line: `hsla(${hue}, 40%, 60%, 1)`,
 			glow: `hsla(${hue}, 100%, 60%, 1)`,
 		};
@@ -214,7 +218,7 @@ export function ChartVisualization({ activeJoints, chartData, chartTimestamps, s
 					})}
 
 					<line x1="50" y1="250" x2="750" y2="250" stroke="var(--shadow-dark)" />
-					<line x1="50" y1="50"  x2="50"  y2="250" stroke="var(--shadow-dark)" />
+					<line x1="50" y1="50" x2="50" y2="250" stroke="var(--shadow-dark)" />
 
 					{[0, 45, 90, 135, 180].map((val, i) => (
 						<text key={`y-${i}`} x="30" y={250 - i * 50} fontSize="14" textAnchor="end" fill="var(--text-secondary)">
