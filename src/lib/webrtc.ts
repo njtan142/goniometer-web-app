@@ -17,7 +17,7 @@ export interface WebRTCClientOpts {
  * Returns one SensorReading[] per timestep. Handles both legacy single-frame
  * packets (32 bytes) and multi-frame batches (N × 32 bytes).
  * Bit layout per 8-byte frame: [63:50]=angle [49:18]=µs_ts [17:10]=SoC [9:0]=flags */
-function parsePacket(buf: ArrayBuffer): SensorReading[][] {
+export function parsePacket(buf: ArrayBuffer): SensorReading[][] {
 	const timestepCount = Math.floor(buf.byteLength / 32);
 	if (timestepCount === 0) return [];
 	const view = new DataView(buf);

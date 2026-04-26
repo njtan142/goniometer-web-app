@@ -7,6 +7,7 @@ import { AnimateModal } from './AnimateModal';
 import { StatusSidebar } from './StatusSidebar';
 import { JOINTS } from '../constants/joints';
 import { WebRTCClient, SensorReading } from '../lib/webrtc';
+import { WSClient } from '../lib/ws';
 
 export const CHART_POINTS = 29;
 export const ACTIVE_JOINTS = ['left-elbow', 'right-elbow', 'left-knee', 'right-knee'];
@@ -22,6 +23,7 @@ export interface HistorySession {
 export function App() {
 	const [framesPerPacket, setFramesPerPacket] = useState(1);
 	const [packetFreqHz, setPacketFreqHz] = useState(60);
+	const [mode, setMode] = useState<'live' | 'record'>('live');
 	const [isRecording, setIsRecording] = useState(false);
 	const [isHeld, setIsHeld] = useState(false);
 	const [selectedJoint, setSelectedJoint] = useState('left-elbow');
@@ -48,56 +50,70 @@ export function App() {
 	isRecordingRef.current = isRecording;
 	zeroOffsetsRef.current = zeroOffsets;
 
-	// ── WebRTC connection ────────────────────────────────────────────────
+	// Shared packet handler — identical logic for both WebRTC and WebSocket.
+	const handlePacket = (readings: SensorReading[]) => {
+		if (isHeldRef.current) return;
+		const soc = readings[0]?.soc_pct ?? 0;
+		setBatteryPct(Math.round(soc));
+		const newAngles: Record<string, number> = {};
+		readings.forEach(r => {
+			const jointId = ACTIVE_JOINTS[r.sensorIndex];
+			if (!jointId) return;
+			newAngles[jointId] = r.degrees - (zeroOffsetsRef.current[jointId] ?? 0);
+		});
+		setJointAngles(prev => ({ ...prev, ...newAngles }));
+		setChartData(prev => {
+			const next = { ...prev };
+			Object.entries(newAngles).forEach(([id, deg]) => {
+				next[id] = [...(prev[id] ?? []), deg].slice(-CHART_POINTS);
+			});
+			return next;
+		});
+		if (isRecordingRef.current) {
+			recordingDataRef.current.push({ t: performance.now(), angles: { ...newAngles } });
+		}
+	};
+
+	// ── Live mode: WebRTC (LFLL) ────────────────────────────────────────
 	useEffect(() => {
+		if (mode !== 'live') return;
 		const client = new WebRTCClient({
-			onPacket: (readings: SensorReading[]) => {
-				if (isHeldRef.current) return;
-
-				// Use first reading's SoC as battery level
-				const soc = readings[0]?.soc_pct ?? batteryPct;
-				setBatteryPct(Math.round(soc));
-
-				// Build angle map for all 4 sensors
-				const newAngles: Record<string, number> = {};
-				readings.forEach(r => {
-					const jointId = ACTIVE_JOINTS[r.sensorIndex];
-					if (!jointId) return;
-					newAngles[jointId] = r.degrees - (zeroOffsetsRef.current[jointId] ?? 0);
-				});
-
-				setJointAngles(prev => ({ ...prev, ...newAngles }));
-				setChartData(prev => {
-					const next = { ...prev };
-					Object.entries(newAngles).forEach(([id, deg]) => {
-						const buf = [...(prev[id] ?? []), deg];
-						next[id] = buf.slice(-CHART_POINTS);
-					});
-					return next;
-				});
-
-				if (isRecordingRef.current) {
-					recordingDataRef.current.push({
-						t: performance.now(),
-						angles: { ...newAngles },
-					});
-				}
-			},
-			onConnected: () => {
-				setIsConnected(true);
-			},
-			onDisconnected: () => {
-				setIsConnected(false);
-			},
+			onPacket: handlePacket,
+			onConnected:    () => setIsConnected(true),
+			onDisconnected: () => setIsConnected(false),
 		});
+		client.connect().catch(err =>
+			console.info('WebRTC unavailable, using mock data:', err.message)
+		);
+		return () => { client.close(); setIsConnected(false); };
+	}, [mode]);
 
-		client.connect().catch(err => {
-			// Expected in dev; app falls back to mock data automatically
-			console.info('WebRTC unavailable, using mock data:', err.message);
-		});
-
-		return () => client.close();
-	}, []); // connect once on mount
+	// ── Record mode: WebSocket (HFHL) ───────────────────────────────────
+	// Delay 600 ms before opening the WebSocket — gives the firmware time to
+	// tear down the WebRTC/DTLS context and free its heap after /api/stop.
+	useEffect(() => {
+		if (mode !== 'record') return;
+		let client: WSClient | null = null;
+		const timer = setTimeout(() => {
+			client = new WSClient({
+				onPacket: handlePacket,
+				onConnected:    () => setIsConnected(true),
+				onDisconnected: () => {
+					setIsConnected(false);
+					// WebSocket dropped mid-recording — save the partial buffer.
+					if (isRecordingRef.current) {
+						isRecordingRef.current = false;
+						setIsRecording(false);
+						finalizeRecording();
+					}
+				},
+			});
+			client.connect('ws://192.168.4.1/ws').catch(err =>
+				console.info('[WS/HFHL] unavailable:', err)
+			);
+		}, 600);
+		return () => { clearTimeout(timer); client?.close(); setIsConnected(false); };
+	}, [mode]);
 
 	// ── Sync batch params to backend ──────────────────────────────────────
 	useEffect(() => {
@@ -122,29 +138,41 @@ export function App() {
 		});
 	};
 
+	const finalizeRecording = () => {
+		const elapsed = performance.now() - (recordingStartRef.current ?? 0);
+		const totalSecs = Math.round(elapsed / 1000);
+		const mins = Math.floor(totalSecs / 60);
+		const secs = totalSecs % 60;
+		const now = new Date();
+		const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+		const joints = ACTIVE_JOINTS.map(id => {
+			const j = JOINTS.find(j => j.value === id);
+			return j?.label.replace('Left ', 'L.').replace('Right ', 'R.') ?? id;
+		}).join(', ');
+		setHistory(prev => [{
+			timestamp: ts,
+			joints,
+			duration: mins > 0 ? `${mins}m ${secs}s` : `${secs}s`,
+			rate: `${framesPerPacket * packetFreqHz}Hz`,
+		}, ...prev]);
+	};
+
 	const handleRecordingToggle = () => {
 		if (!isRecording) {
+			// Switch to WebSocket (HFHL) mode — tell firmware to stop WebRTC so
+			// it can free its DTLS heap before the WebSocket ring buffer allocates.
+			fetch('/api/stop', { method: 'POST' }).catch(() => {});
 			recordingStartRef.current = performance.now();
 			recordingDataRef.current = [];
+			isRecordingRef.current = true;
 			setIsRecording(true);
+			setIsConnected(false);
+			setMode('record');
 		} else {
 			setIsRecording(false);
-			const elapsed = performance.now() - (recordingStartRef.current ?? 0);
-			const totalSecs = Math.round(elapsed / 1000);
-			const mins = Math.floor(totalSecs / 60);
-			const secs = totalSecs % 60;
-			const now = new Date();
-			const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-			const joints = ACTIVE_JOINTS.map(id => {
-				const j = JOINTS.find(j => j.value === id);
-				return j?.label.replace('Left ', 'L.').replace('Right ', 'R.') ?? id;
-			}).join(', ');
-			setHistory(prev => [{
-				timestamp: ts,
-				joints,
-				duration: mins > 0 ? `${mins}m ${secs}s` : `${secs}s`,
-				rate: `${framesPerPacket * packetFreqHz}Hz`,
-			}, ...prev]);
+			finalizeRecording();
+			setIsConnected(false);
+			setMode('live');
 		}
 	};
 
