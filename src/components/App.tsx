@@ -480,9 +480,11 @@ export function App() {
 			const range    = joint ? NORMATIVE_RANGES[joint.type as keyof typeof NORMATIVE_RANGES] : null;
 			const [r, g, b] = hexToRgb(JOINT_COLORS[id as keyof typeof JOINT_COLORS] ?? '#888888');
 
-			// Polyline
+			// Polyline — thin lines with round joins for smooth PDF rendering
 			doc.setDrawColor(r, g, b);
-			doc.setLineWidth(0.45);
+			doc.setLineWidth(0.25);
+			(doc as unknown as { setLineJoin: (s: string) => void }).setLineJoin('round');
+			(doc as unknown as { setLineCap: (s: string) => void }).setLineCap('round');
 			for (let i = 1; i < chartPts.length; i++) {
 				const prev = chartPts[i - 1];
 				const curr = chartPts[i];

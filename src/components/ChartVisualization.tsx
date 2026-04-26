@@ -232,11 +232,15 @@ export function ChartVisualization({ activeJoints, chartData, chartTimestamps, s
 
 						const pointsStr = toPoints(angles);
 						const n = angles.length;
-						const points = angles.map((deg, i) => ({
-							x: 50 + i * (700 / Math.max(1, n - 1)),
-							y: Math.max(50, Math.min(250, getY(deg))),
-							deg,
-						}));
+						// Only compute per-point data when zoomed in enough to benefit from dots
+						const showPoints = visibleCount <= 100;
+						const points = showPoints
+							? angles.map((deg, i) => ({
+								x: 50 + i * (700 / Math.max(1, n - 1)),
+								y: Math.max(50, Math.min(250, getY(deg))),
+								deg,
+							}))
+							: [];
 
 						const joint = JOINTS.find(j => j.value === jointId);
 						const range = joint ? NORMATIVE_RANGES[joint.type as keyof typeof NORMATIVE_RANGES] : null;
@@ -250,7 +254,7 @@ export function ChartVisualization({ activeJoints, chartData, chartTimestamps, s
 									strokeWidth="2"
 									opacity={1 - idx * 0.15}
 								/>
-								{range && points.map((p, i) => {
+								{showPoints && range && points.map((p, i) => {
 									const isNormative = p.deg >= range.min && p.deg <= range.max;
 									if (!isNormative) {
 										return (
