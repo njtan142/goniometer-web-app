@@ -10,6 +10,8 @@ interface ControlPanelTopProps {
 	onRecordingToggle: () => void;
 	onHold: () => void;
 	onExport: () => void;
+	onExportJSON: () => void;
+	onImportJSON: () => void;
 	onSetZero: () => void;
 }
 
@@ -23,19 +25,21 @@ export function ControlPanelTop({
 	onRecordingToggle,
 	onHold,
 	onExport,
+	onExportJSON,
+	onImportJSON,
 	onSetZero,
 }: ControlPanelTopProps) {
 	const totalHz = framesPerPacket * packetFreqHz;
 	return (
 		<S.ControlPanelTop>
-			<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+			<div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
 				<S.ControlGroup>
 					<label>Frames/pkt:</label>
 					<S.RangeInput
 						min="1"
 						max="46"
 						value={framesPerPacket}
-						onChange={e => onFramesPerPacketChange(Number(e.target.value))}
+						onChange={e => onFramesPerPacketChange(Number((e.target as HTMLInputElement).value))}
 					/>
 					<span style={{ fontSize: '13px', color: 'var(--text-main)', minWidth: '28px' }}>{framesPerPacket}</span>
 				</S.ControlGroup>
@@ -45,7 +49,7 @@ export function ControlPanelTop({
 						min="10"
 						max="400"
 						value={packetFreqHz}
-						onChange={e => onPacketFreqChange(Number(e.target.value))}
+						onChange={e => onPacketFreqChange(Number((e.target as HTMLInputElement).value))}
 					/>
 					<span style={{ fontSize: '13px', color: 'var(--text-main)', minWidth: '40px' }}>{packetFreqHz}Hz</span>
 				</S.ControlGroup>
@@ -53,7 +57,7 @@ export function ControlPanelTop({
 					Total: {totalHz} readings/s
 				</div>
 
-				<div style={{ display: 'flex', gap: '8px' }}>
+				<div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
 					<S.Button
 						className="secondary"
 						onClick={onHold}
@@ -74,7 +78,9 @@ export function ControlPanelTop({
 					>
 						{isRecording ? 'Stop' : 'Record'}
 					</S.Button>
-					<S.Button className="secondary" onClick={onExport}>Export</S.Button>
+					<S.Button className="secondary" onClick={onExport}>CSV</S.Button>
+					<S.Button className="secondary" onClick={onExportJSON}>JSON</S.Button>
+					<S.Button className="secondary" onClick={onImportJSON}>Import</S.Button>
 				</div>
 			</div>
 

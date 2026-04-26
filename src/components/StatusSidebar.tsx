@@ -9,9 +9,20 @@ interface StatusSidebarProps {
 	history: HistorySession[];
 	batteryPct?: number;
 	isConnected?: boolean;
+	onSessionClick?: (session: HistorySession) => void;
+	onImportJSON?: () => void;
 }
 
-export function StatusSidebar({ activeJoints, jointAngles, chartData, history, batteryPct = 92, isConnected = false }: StatusSidebarProps) {
+export function StatusSidebar({
+	activeJoints,
+	jointAngles,
+	chartData,
+	history,
+	batteryPct = 92,
+	isConnected = false,
+	onSessionClick,
+	onImportJSON,
+}: StatusSidebarProps) {
 	return (
 		<S.RightSidebar>
 			<S.StatusSection>
@@ -59,13 +70,33 @@ export function StatusSidebar({ activeJoints, jointAngles, chartData, history, b
 			</S.StatusSection>
 
 			<S.StatusSection>
-				<S.StatusTitle style={{ marginBottom: '8px' }}>History</S.StatusTitle>
+				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+					<S.StatusTitle style={{ marginBottom: 0 }}>History</S.StatusTitle>
+					{onImportJSON && (
+						<S.Button
+							className="secondary"
+							onClick={onImportJSON}
+							style={{ fontSize: '11px', padding: '4px 10px' }}
+						>
+							Import
+						</S.Button>
+					)}
+				</div>
 				<S.HistoryContainer>
 					<S.HistoryList>
 						{history.map((session, i) => (
-							<S.HistoryItem key={i}>
+							<S.HistoryItem
+								key={i}
+								onClick={() => onSessionClick?.(session)}
+								style={session.rawData?.length ? { cursor: 'pointer' } : { cursor: 'default', opacity: 0.7 }}
+							>
 								<div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '4px' }}>
 									{session.timestamp}
+									{session.rawData?.length ? (
+										<span style={{ fontSize: '10px', color: 'var(--text-secondary)', marginLeft: '6px', fontWeight: 400 }}>
+											▶ playback
+										</span>
+									) : null}
 								</div>
 								<div style={{ fontSize: '11px', color: 'var(--text-main)', marginBottom: '3px' }}>
 									Joints: {session.joints}

@@ -37,7 +37,8 @@ export const TopPanel = styled.div`
 	border-radius: 20px;
 	box-shadow: var(--shadow-raised);
 	align-items: center;
-	height: 150px;
+	min-height: 150px;
+	flex-shrink: 0;
 `;
 
 export const GaugeSection = styled.div`

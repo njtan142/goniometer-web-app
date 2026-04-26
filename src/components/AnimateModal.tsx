@@ -14,6 +14,8 @@ interface AnimateModalProps {
 	isOpen: boolean;
 	onClose: () => void;
 	targetJoint?: TargetJoint;
+	/** Live angle in degrees — drives bone rotation in real time */
+	liveAngle?: number;
 }
 
 // Map target joints to bone name patterns
@@ -48,11 +50,18 @@ const CAMERA_CONFIGS: Record<TargetJoint, { distanceMultiplierX: number; distanc
 	rightWrist: { distanceMultiplierX: 0.1, distanceMultiplierY: 0.1, distanceMultiplierZ: 0.1 },
 };
 
-export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow' }: AnimateModalProps) {
-	const containerRef = useRef<HTMLDivElement>(null);
-	const sceneRef = useRef<THREE.Scene | null>(null);
-	const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow', liveAngle }: AnimateModalProps) {
+	const containerRef     = useRef<HTMLDivElement>(null);
+	const sceneRef         = useRef<THREE.Scene | null>(null);
+	const rendererRef      = useRef<THREE.WebGLRenderer | null>(null);
 	const animationFrameRef = useRef<number | null>(null);
+	const targetBoneRef    = useRef<THREE.Bone | null>(null);
+	const liveAngleRef     = useRef(liveAngle ?? 0);
+
+	// Keep liveAngleRef current without re-running Three.js setup
+	useEffect(() => {
+		liveAngleRef.current = liveAngle ?? 0;
+	}, [liveAngle]);
 
 	useEffect(() => {
 		if (!isOpen || !containerRef.current) return;
@@ -88,7 +97,6 @@ export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow' }: An
 
 		// Load character model
 		const loader = new GLTFLoader();
-		// Set the resource path so the loader can find scene.bin relative to scene.gltf
 		const basePath = sceneUrl.substring(0, sceneUrl.lastIndexOf('/') + 1);
 		loader.setResourcePath(basePath);
 		loader.load(sceneUrl, (gltf) => {
@@ -98,7 +106,7 @@ export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow' }: An
 			// Find the target joint bone
 			let targetBone: THREE.Bone | null = null;
 			const bonePatterns = JOINT_BONE_PATTERNS[targetJoint];
-			
+
 			model.traverse((node) => {
 				if (node instanceof THREE.Bone && !targetBone) {
 					const name = node.name.toLowerCase();
@@ -108,29 +116,27 @@ export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow' }: An
 				}
 			});
 
+			targetBoneRef.current = targetBone;
+
 			// Calculate camera position based on bounding box
 			const box = new THREE.Box3().setFromObject(model);
 			const size = box.getSize(new THREE.Vector3());
 			const maxDim = Math.max(size.x, size.y, size.z);
 			const fov = camera.fov * (Math.PI / 180);
 			let cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-			cameraDistance *= 1.5; // Add padding
+			cameraDistance *= 1.5;
 
 			const cameraConfig = CAMERA_CONFIGS[targetJoint];
 
 			if (targetBone) {
-				// Focus camera on the target joint bone
 				const jointWorldPos = new THREE.Vector3();
 				targetBone.getWorldPosition(jointWorldPos);
-				
-				// Position camera to view the joint from a good angle, zoomed in
 				camera.position.copy(jointWorldPos);
 				camera.position.x += cameraDistance * cameraConfig.distanceMultiplierX;
 				camera.position.y += cameraDistance * cameraConfig.distanceMultiplierY;
 				camera.position.z += cameraDistance * cameraConfig.distanceMultiplierZ;
 				camera.lookAt(jointWorldPos);
 			} else {
-				// Fallback: frame the entire model if bone not found
 				const center = box.getCenter(new THREE.Vector3());
 				model.position.sub(center);
 				camera.position.set(center.x + cameraDistance * 0.5, center.y + cameraDistance * 0.3, cameraDistance);
@@ -139,9 +145,16 @@ export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow' }: An
 			}
 		});
 
-		// Animation loop
+		// Animation loop — apply live angle to target bone every frame
 		const animate = () => {
 			animationFrameRef.current = requestAnimationFrame(animate);
+
+			if (targetBoneRef.current) {
+				const rad = (liveAngleRef.current * Math.PI) / 180;
+				// X-axis rotation = flexion/extension for most hinge joints
+				targetBoneRef.current.rotation.x = rad;
+			}
+
 			renderer.render(scene, camera);
 		};
 		animate();
@@ -157,12 +170,12 @@ export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow' }: An
 		};
 		window.addEventListener('resize', handleResize);
 
-		// Cleanup
 		return () => {
 			window.removeEventListener('resize', handleResize);
 			if (animationFrameRef.current !== null) {
 				cancelAnimationFrame(animationFrameRef.current);
 			}
+			targetBoneRef.current = null;
 			if (containerRef.current && renderer.domElement.parentNode === containerRef.current) {
 				containerRef.current.removeChild(renderer.domElement);
 			}
@@ -176,29 +189,20 @@ export function AnimateModal({ isOpen, onClose, targetJoint = 'rightElbow' }: An
 		<S.ModalOverlay onClick={onClose}>
 			<S.ModalContent onClick={e => e.stopPropagation()}>
 				<S.ModalHeader>
-					<S.ModalTitle>Animation Settings</S.ModalTitle>
+					<S.ModalTitle>3D Animation — {targetJoint}</S.ModalTitle>
 					<S.CloseButton onClick={onClose}>×</S.CloseButton>
 				</S.ModalHeader>
 				<S.ModalBody>
-					<div ref={containerRef} style={{ width: '100%', height: '400px', marginBottom: '16px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#f5f5f5' }} />
-					<div style={{ marginBottom: '16px' }}>
-						<label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#333' }}>
-							Play Speed
-						</label>
-						<input type="range" min="0.5" max="2" step="0.5" defaultValue="1" style={{ width: '100%' }} />
-					</div>
-					<div style={{ marginBottom: '16px' }}>
-						<label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#333' }}>
-							Loop Animation
-						</label>
-						<input type="checkbox" defaultChecked />
+					<div
+						ref={containerRef}
+						style={{ width: '100%', height: '400px', marginBottom: '16px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}
+					/>
+					<div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+						Bone rotates in real time with live sensor data. Current angle: {(liveAngle ?? 0).toFixed(1)}°
 					</div>
 				</S.ModalBody>
 				<S.ModalFooter>
-					<S.Button className="secondary" onClick={onClose}>
-						Cancel
-					</S.Button>
-					<S.Button onClick={onClose}>Play</S.Button>
+					<S.Button onClick={onClose}>Close</S.Button>
 				</S.ModalFooter>
 			</S.ModalContent>
 		</S.ModalOverlay>
