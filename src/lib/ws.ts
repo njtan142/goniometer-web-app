@@ -1,4 +1,4 @@
-import { parsePacket, SensorReading } from './webrtc';
+import { parsePacketV2, SensorReading } from './webrtc';
 
 export interface WSClientOpts {
 	onPacket: (readings: SensorReading[]) => void;
@@ -35,7 +35,7 @@ export class WSClient {
 			};
 
 			ws.onmessage = (e: MessageEvent<ArrayBuffer>) => {
-				const batches = parsePacket(e.data);
+				const batches = parsePacketV2(e.data);
 				for (const readings of batches) {
 					this.opts.onPacket(readings);
 				}

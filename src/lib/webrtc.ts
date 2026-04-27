@@ -48,6 +48,59 @@ export function parsePacket(buf: ArrayBuffer): SensorReading[][] {
 	return result;
 }
 
+/* Decode a v2 compressed batch produced by compress_batch() in hfhl_ws.c.
+ * Header (18 B): [0]=2 [1-2]=count LE [3-6]=base_ts LE [7-14]=4×uint16 angles LE
+ *                [15]=soc [16-17]=flags LE
+ * Delta (6 B each, samples 1..n-1): [0-3]=4×int8 delta_angle [4-5]=uint16 delta_ts LE
+ * Falls back to v1 parsePacket if first byte != 2. */
+export function parsePacketV2(buf: ArrayBuffer): SensorReading[][] {
+	const view = new DataView(buf);
+	if (buf.byteLength < 18 || view.getUint8(0) !== 2) return parsePacket(buf);
+
+	const n        = view.getUint16(1, true);
+	const base_ts  = view.getUint32(3, true);
+	const base_ang = [0, 1, 2, 3].map(s => view.getUint16(7 + s * 2, true) & 0x3FFF);
+	const soc      = view.getUint8(15);
+	const flags    = view.getUint16(16, true);
+	const soc_pct  = soc * (100.0 / 255.0);
+
+	const result: SensorReading[][] = [];
+	const curr_ang = [...base_ang];
+	let   curr_ts  = base_ts;
+
+	/* First sample — base values */
+	result.push(curr_ang.map((ang, s) => ({
+		sensorIndex: s,
+		degrees:   ang * (360.0 / 16384.0),
+		soc_pct,
+		flags,
+		timestamp: curr_ts,
+	})));
+
+	/* Delta samples */
+	for (let t = 1; t < n; t++) {
+		const off = 18 + (t - 1) * 6;
+		if (off + 6 > buf.byteLength) break;
+		curr_ts = (curr_ts + view.getUint16(off + 4, true)) >>> 0;
+		const readings: SensorReading[] = [];
+		for (let s = 0; s < 4; s++) {
+			let ang = curr_ang[s] + view.getInt8(off + s);
+			if (ang < 0)      ang += 16384;
+			if (ang >= 16384) ang -= 16384;
+			curr_ang[s] = ang;
+			readings.push({
+				sensorIndex: s,
+				degrees:   ang * (360.0 / 16384.0),
+				soc_pct,
+				flags,
+				timestamp: curr_ts,
+			});
+		}
+		result.push(readings);
+	}
+	return result;
+}
+
 function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 4000): Promise<void> {
 	return new Promise(resolve => {
 		if (pc.iceGatheringState === 'complete') { resolve(); return; }
